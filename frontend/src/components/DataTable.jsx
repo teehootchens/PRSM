@@ -4,6 +4,7 @@ import {
   getFilteredRowModel, flexRender,
 } from '@tanstack/react-table'
 import { formatIP } from '../utils'
+import { useFilter } from '../FilterContext'
 
 export function ScoreBadge({ value }) {
   const pct = Math.round((value || 0) * 100)
@@ -43,10 +44,9 @@ const CLICKABLE = ['src', 'dst', 'fqdn']
 
 export default function DataTable({ data, columns, defaultSort }) {
   const [sorting, setSorting] = useState(defaultSort || [])
-  const [globalFilter, setGlobalFilter] = useState('')
+  const { globalFilter, setGlobalFilter } = useFilter()
   const [expanded, setExpanded] = useState({})
 
-  // Memoize grouping so it only recalculates when data changes, not on filter/sort
   const { grouped, flatPrimary } = useMemo(() => {
     const grouped = {}
     for (const row of data) {
