@@ -6,6 +6,7 @@ import Beaconing from './pages/Beaconing.jsx'
 import LongConns from './pages/LongConns.jsx'
 import DNS from './pages/DNS.jsx'
 import ThreatIntel from './pages/ThreatIntel.jsx'
+import Strobe from './pages/Strobe.jsx'
 import Login from './pages/Login.jsx'
 import './App.css'
 
@@ -63,6 +64,7 @@ function Shell() {
         <NavLink to="/longconns" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Long Connections</NavLink>
         <NavLink to="/dns" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>DNS Analysis</NavLink>
         <NavLink to="/threatintel" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Threat Intel</NavLink>
+        <NavLink to="/strobe" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Strobe Detection</NavLink>
         <div style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid #2d3148' }}>
           <button onClick={logout} style={{
             background: 'none', border: 'none', color: '#475569',
@@ -78,6 +80,7 @@ function Shell() {
           <Route path="/longconns" element={<LongConns />} />
           <Route path="/dns" element={<DNS />} />
           <Route path="/threatintel" element={<ThreatIntel />} />
+          <Route path="/strobe" element={<Strobe />} />
         </Routes>
       </main>
     </div>
