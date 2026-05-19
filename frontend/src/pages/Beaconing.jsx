@@ -7,9 +7,7 @@ import {
   flexRender,
 } from '@tanstack/react-table'
 import axios from 'axios'
-
-const API = import.meta.env.VITE_API_BASE || ''
-const AUTH = { auth: { username: 'admin', password: 'changeme' } }
+import { useAuth } from '../AuthContext'
 
 function ScoreBadge({ value }) {
   const pct = Math.round((value || 0) * 100)
@@ -30,6 +28,9 @@ function ScoreBadge({ value }) {
 }
 
 export default function Beaconing() {
+  const { credentials } = useAuth()
+  const auth = { auth: credentials }
+
   const [datasets, setDatasets] = useState([])
   const [dataset, setDataset] = useState('')
   const [data, setData] = useState([])
@@ -39,7 +40,7 @@ export default function Beaconing() {
   const [globalFilter, setGlobalFilter] = useState('')
 
   useEffect(() => {
-    axios.get(`${API}/api/datasets`, AUTH)
+    axios.get('/api/datasets', auth)
       .then(r => {
         setDatasets(r.data.datasets)
         if (r.data.datasets.length > 0) setDataset(r.data.datasets[0])
@@ -51,7 +52,7 @@ export default function Beaconing() {
     if (!dataset) return
     setLoading(true)
     setError(null)
-    axios.get(`${API}/api/beaconing`, { ...AUTH, params: { dataset, limit: 500 } })
+    axios.get('/api/beaconing', { ...auth, params: { dataset, limit: 500 } })
       .then(r => setData(r.data.results))
       .catch(() => setError('Failed to load beaconing data'))
       .finally(() => setLoading(false))
