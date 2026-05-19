@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 load_dotenv("/opt/rita-gui/.env")
 
-from backend.routers import beaconing, datasets
+from backend.routers import beaconing, datasets, longconns, dns, threatintel
 
 app = FastAPI(title="RITA GUI", version="0.1.0")
 security = HTTPBasic()
@@ -27,14 +27,16 @@ def require_auth(credentials: HTTPBasicCredentials = Depends(security)):
         )
     return credentials.username
 
-app.include_router(beaconing.router, dependencies=[Depends(require_auth)])
-app.include_router(datasets.router, dependencies=[Depends(require_auth)])
+app.include_router(beaconing.router,   dependencies=[Depends(require_auth)])
+app.include_router(datasets.router,    dependencies=[Depends(require_auth)])
+app.include_router(longconns.router,   dependencies=[Depends(require_auth)])
+app.include_router(dns.router,         dependencies=[Depends(require_auth)])
+app.include_router(threatintel.router, dependencies=[Depends(require_auth)])
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
-# Serve React frontend — must be last
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 app.mount("/assets", StaticFiles(directory=os.path.join(STATIC_DIR, "assets")), name="assets")
 

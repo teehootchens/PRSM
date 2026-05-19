@@ -1,6 +1,9 @@
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
 import { AuthProvider, useAuth } from './AuthContext'
 import Beaconing from './pages/Beaconing.jsx'
+import LongConns from './pages/LongConns.jsx'
+import DNS from './pages/DNS.jsx'
+import ThreatIntel from './pages/ThreatIntel.jsx'
 import Login from './pages/Login.jsx'
 import './App.css'
 
@@ -16,20 +19,17 @@ function Shell() {
         <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
           Beaconing
         </NavLink>
+        <NavLink to="/longconns" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+          Long Connections
+        </NavLink>
+        <NavLink to="/dns" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+          DNS Analysis
+        </NavLink>
+        <NavLink to="/threatintel" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+          Threat Intel
+        </NavLink>
         <div style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid #2d3148' }}>
-          <button
-            onClick={logout}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#475569',
-              cursor: 'pointer',
-              fontSize: 13,
-              padding: '0.4rem 0',
-              width: '100%',
-              textAlign: 'left',
-            }}
-          >
+          <button onClick={logout} style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 13, padding: '0.4rem 0', width: '100%', textAlign: 'left' }}>
             Sign out
           </button>
         </div>
@@ -37,6 +37,9 @@ function Shell() {
       <main className="content">
         <Routes>
           <Route path="/" element={<Beaconing />} />
+          <Route path="/longconns" element={<LongConns />} />
+          <Route path="/dns" element={<DNS />} />
+          <Route path="/threatintel" element={<ThreatIntel />} />
         </Routes>
       </main>
     </div>
