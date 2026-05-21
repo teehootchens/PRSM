@@ -2,12 +2,15 @@ import { useEffect, useState, useMemo } from 'react'
 import axios from 'axios'
 import { useAuth } from '../AuthContext'
 import { useDataset } from '../DatasetContext'
+import { useFilters } from '../FiltersContext'
 import DataTable, { ScoreBadge } from '../components/DataTable'
+import FilterBar from '../components/FilterBar'
 import { formatIP, formatBytes, formatDuration } from '../utils'
 
 export default function LongConns() {
   const { credentials } = useAuth()
   const { datasets, setDatasets, dataset, setDataset } = useDataset()
+  const { dateRangeHours, customDateFrom, customDateTo, minScore, beaconType, threatIntelOnly, protocol } = useFilters()
   const auth = { auth: credentials }
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(false)
@@ -23,11 +26,20 @@ export default function LongConns() {
   useEffect(() => {
     if (!dataset) return
     setLoading(true); setError(null)
-    axios.get('/api/longconns', { ...auth, params: { dataset, limit: 1000 } })
+    axios.get('/api/longconns', { ...auth, params: {
+      dataset, limit: 1000,
+      min_score: minScore,
+      since_hours: (dateRangeHours && dateRangeHours !== 'custom') ? dateRangeHours : undefined,
+      date_from: dateRangeHours === 'custom' ? customDateFrom || undefined : undefined,
+      date_to: dateRangeHours === 'custom' ? customDateTo || undefined : undefined,
+      beacon_type: beaconType || undefined,
+      threat_intel_only: threatIntelOnly || undefined,
+      protocol: protocol || undefined,
+    }})
       .then(r => setData(r.data.results))
       .catch(() => setError('Failed to load long connections'))
       .finally(() => setLoading(false))
-  }, [dataset])
+  }, [dataset, minScore, dateRangeHours, customDateFrom, customDateTo, beaconType, threatIntelOnly, protocol])
 
   const columns = useMemo(() => [
     { accessorKey: 'long_conn_score', header: 'Score', cell: ({ getValue }) => <ScoreBadge value={getValue()} /> },
@@ -43,7 +55,8 @@ export default function LongConns() {
 
   return (
     <div>
-      <h1 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#7c85f5', marginBottom: '1.5rem' }}>Long Connections</h1>
+      <h1 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#7c85f5', marginBottom: '1rem' }}>Long Connections</h1>
+      <FilterBar />
       {error && <div style={{ color: '#ef4444', marginBottom: '1rem' }}>{error}</div>}
       {loading && <div style={{ color: '#7c85f5' }}>Loading...</div>}
       {!loading && <DataTable data={data} columns={columns} defaultSort={[{ id: 'long_conn_score', desc: true }]} />}

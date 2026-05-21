@@ -1,14 +1,16 @@
 import { useEffect, useState, useMemo } from 'react'
-import { flexRender } from '@tanstack/react-table'
 import axios from 'axios'
 import { useAuth } from '../AuthContext'
 import { useDataset } from '../DatasetContext'
+import { useFilters } from '../FiltersContext'
 import DataTable, { ScoreBadge } from '../components/DataTable'
+import FilterBar from '../components/FilterBar'
 import { formatIP } from '../utils'
 
 export default function Beaconing() {
   const { credentials } = useAuth()
   const { datasets, setDatasets, dataset, setDataset } = useDataset()
+  const { dateRangeHours, customDateFrom, customDateTo, minScore, beaconType, threatIntelOnly, protocol } = useFilters()
   const auth = { auth: credentials }
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(false)
@@ -17,21 +19,27 @@ export default function Beaconing() {
   useEffect(() => {
     if (datasets.length) return
     axios.get('/api/datasets', auth)
-      .then(r => {
-        setDatasets(r.data.datasets)
-        if (!dataset && r.data.datasets.length > 0) setDataset(r.data.datasets[0])
-      })
+      .then(r => { setDatasets(r.data.datasets); if (!dataset && r.data.datasets.length > 0) setDataset(r.data.datasets[0]) })
       .catch(() => setError('Could not load datasets'))
   }, [])
 
   useEffect(() => {
     if (!dataset) return
     setLoading(true); setError(null)
-    axios.get('/api/beaconing', { ...auth, params: { dataset, limit: 1000 } })
+    axios.get('/api/beaconing', { ...auth, params: {
+      dataset, limit: 1000,
+      min_score: minScore,
+      since_hours: (dateRangeHours && dateRangeHours !== 'custom') ? dateRangeHours : undefined,
+      date_from: dateRangeHours === 'custom' ? customDateFrom || undefined : undefined,
+      date_to: dateRangeHours === 'custom' ? customDateTo || undefined : undefined,
+      beacon_type: beaconType || undefined,
+      threat_intel_only: threatIntelOnly || undefined,
+      protocol: protocol || undefined,
+    }})
       .then(r => setData(r.data.results))
       .catch(() => setError('Failed to load beaconing data'))
       .finally(() => setLoading(false))
-  }, [dataset])
+  }, [dataset, minScore, dateRangeHours, customDateFrom, customDateTo, beaconType, threatIntelOnly, protocol])
 
   const columns = useMemo(() => [
     { accessorKey: 'beacon_threat_score', header: 'Threat Score', cell: ({ getValue }) => <ScoreBadge value={getValue()} /> },
@@ -47,9 +55,8 @@ export default function Beaconing() {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
-        <h1 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#7c85f5' }}>Beaconing</h1>
-      </div>
+      <h1 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#7c85f5', marginBottom: '1rem' }}>Beaconing</h1>
+      <FilterBar />
       {error && <div style={{ color: '#ef4444', marginBottom: '1rem' }}>{error}</div>}
       {loading && <div style={{ color: '#7c85f5' }}>Loading...</div>}
       {!loading && <DataTable data={data} columns={columns} defaultSort={[{ id: 'beacon_threat_score', desc: true }]} />}

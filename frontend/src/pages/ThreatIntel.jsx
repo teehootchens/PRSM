@@ -2,12 +2,15 @@ import { useEffect, useState, useMemo } from 'react'
 import axios from 'axios'
 import { useAuth } from '../AuthContext'
 import { useDataset } from '../DatasetContext'
+import { useFilters } from '../FiltersContext'
 import DataTable, { ScoreBadge } from '../components/DataTable'
+import FilterBar from '../components/FilterBar'
 import { formatIP, formatBytes } from '../utils'
 
 export default function ThreatIntel() {
   const { credentials } = useAuth()
   const { datasets, setDatasets, dataset, setDataset } = useDataset()
+  const { dateRangeHours, customDateFrom, customDateTo, minScore, beaconType, threatIntelOnly, protocol } = useFilters()
   const auth = { auth: credentials }
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(false)
@@ -23,11 +26,19 @@ export default function ThreatIntel() {
   useEffect(() => {
     if (!dataset) return
     setLoading(true); setError(null)
-    axios.get('/api/threatintel', { ...auth, params: { dataset, limit: 1000 } })
+    axios.get('/api/threatintel', { ...auth, params: {
+      dataset, limit: 1000,
+      min_score: minScore,
+      since_hours: (dateRangeHours && dateRangeHours !== 'custom') ? dateRangeHours : undefined,
+      date_from: dateRangeHours === 'custom' ? customDateFrom || undefined : undefined,
+      date_to: dateRangeHours === 'custom' ? customDateTo || undefined : undefined,
+      beacon_type: beaconType || undefined,
+      protocol: protocol || undefined,
+    }})
       .then(r => setData(r.data.results))
       .catch(() => setError('Failed to load threat intel data'))
       .finally(() => setLoading(false))
-  }, [dataset])
+  }, [dataset, minScore, dateRangeHours, customDateFrom, customDateTo, beaconType, threatIntelOnly, protocol])
 
   const columns = useMemo(() => [
     { accessorKey: 'threat_intel_score', header: 'TI Score', cell: ({ getValue }) => <ScoreBadge value={getValue()} /> },
@@ -44,7 +55,8 @@ export default function ThreatIntel() {
 
   return (
     <div>
-      <h1 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#ef4444', marginBottom: '1.5rem' }}>Threat Intel Hits</h1>
+      <h1 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#ef4444', marginBottom: '1rem' }}>Threat Intel Hits</h1>
+      <FilterBar />
       {error && <div style={{ color: '#ef4444', marginBottom: '1rem' }}>{error}</div>}
       {loading && <div style={{ color: '#7c85f5' }}>Loading...</div>}
       {!loading && data.length === 0 && !error && (

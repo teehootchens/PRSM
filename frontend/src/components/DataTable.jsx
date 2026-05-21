@@ -4,7 +4,8 @@ import {
   getFilteredRowModel, flexRender,
 } from '@tanstack/react-table'
 import { formatIP } from '../utils'
-import { useFilter } from '../FilterContext'
+import { useFilters } from '../FiltersContext'
+import DetailPanel from './DetailPanel'
 
 export function ScoreBadge({ value }) {
   const pct = Math.round((value || 0) * 100)
@@ -44,8 +45,9 @@ const CLICKABLE = ['src', 'dst', 'fqdn']
 
 export default function DataTable({ data, columns, defaultSort }) {
   const [sorting, setSorting] = useState(defaultSort || [])
-  const { globalFilter, setGlobalFilter } = useFilter()
+  const { globalFilter, setGlobalFilter } = useFilters()
   const [expanded, setExpanded] = useState({})
+  const [selectedRow, setSelectedRow] = useState(null)
 
   const { grouped, flatPrimary } = useMemo(() => {
     const grouped = {}
@@ -78,12 +80,19 @@ export default function DataTable({ data, columns, defaultSort }) {
     getFilteredRowModel: getFilteredRowModel(),
   })
 
-  const handleCellClick = (colId, value) => {
-    if (!CLICKABLE.includes(colId) || !value) return
-    setGlobalFilter(formatIP(value))
+  const handleCellClick = (e, colId, value, rowData) => {
+    if (CLICKABLE.includes(colId) && value) {
+      e.stopPropagation()
+      setGlobalFilter(formatIP(value))
+    }
   }
 
-  const toggleExpand = (key) => {
+  const handleRowClick = (rowData) => {
+    setSelectedRow(rowData)
+  }
+
+  const toggleExpand = (e, key) => {
+    e.stopPropagation()
     setExpanded(prev => ({ ...prev, [key]: !prev[key] }))
   }
 
@@ -100,13 +109,10 @@ export default function DataTable({ data, columns, defaultSort }) {
           }}
         />
         {globalFilter && (
-          <button
-            onClick={() => setGlobalFilter('')}
-            style={{
-              background: '#2d3148', border: 'none', color: '#94a3b8',
-              borderRadius: 6, padding: '0.4rem 0.75rem', cursor: 'pointer', fontSize: 12,
-            }}
-          >
+          <button onClick={() => setGlobalFilter('')} style={{
+            background: '#2d3148', border: 'none', color: '#94a3b8',
+            borderRadius: 6, padding: '0.4rem 0.75rem', cursor: 'pointer', fontSize: 12,
+          }}>
             Clear
           </button>
         )}
@@ -139,19 +145,26 @@ export default function DataTable({ data, columns, defaultSort }) {
               const isExpanded = expanded[key]
 
               return [
-                <tr key={`row-${row.id}`} style={{ background: i % 2 === 0 ? '#0f1117' : '#13161f' }}>
+                <tr
+                  key={`row-${row.id}`}
+                  onClick={() => handleRowClick(row.original)}
+                  style={{
+                    background: i % 2 === 0 ? '#0f1117' : '#13161f',
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#1a1d27'}
+                  onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? '#0f1117' : '#13161f'}
+                >
                   <td
-                    style={{ ...CELL_STYLE, width: 32, textAlign: 'center', cursor: hasChildren ? 'pointer' : 'default' }}
-                    onClick={() => hasChildren && toggleExpand(key)}
+                    style={{ ...CELL_STYLE, width: 32, textAlign: 'center' }}
+                    onClick={e => hasChildren && toggleExpand(e, key)}
                   >
                     {hasChildren && (
                       <span style={{
                         color: '#7c85f5', fontSize: 12, display: 'inline-block',
                         transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                        transition: 'transform 0.15s',
-                      }}>
-                        ▼
-                      </span>
+                        transition: 'transform 0.15s', cursor: 'pointer',
+                      }}>▼</span>
                     )}
                   </td>
                   {row.getVisibleCells().map(cell => {
@@ -163,12 +176,11 @@ export default function DataTable({ data, columns, defaultSort }) {
                         key={cell.id}
                         style={{
                           ...CELL_STYLE,
-                          cursor: isClickable && rawVal ? 'pointer' : 'default',
                           color: isClickable && rawVal ? '#93c5fd' : 'inherit',
                           textDecoration: isClickable && rawVal ? 'underline dotted' : 'none',
                         }}
-                        onClick={() => handleCellClick(colId, rawVal)}
-                        title={isClickable && rawVal ? `Filter by ${formatIP(rawVal)}` : undefined}
+                        onClick={e => handleCellClick(e, colId, rawVal, row.original)}
+                        title={isClickable && rawVal ? `Filter by ${formatIP(rawVal)}` : 'Click row for details'}
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
@@ -177,7 +189,13 @@ export default function DataTable({ data, columns, defaultSort }) {
                 </tr>,
                 ...(isExpanded && hasChildren
                   ? group.children.map((childRow, ci) => (
-                      <tr key={`${key}-child-${ci}`} style={{ background: '#0d1020' }}>
+                      <tr
+                        key={`${key}-child-${ci}`}
+                        style={{ background: '#0d1020', cursor: 'pointer' }}
+                        onClick={() => handleRowClick(childRow)}
+                        onMouseEnter={e => e.currentTarget.style.background = '#1a1d27'}
+                        onMouseLeave={e => e.currentTarget.style.background = '#0d1020'}
+                      >
                         <td style={{ ...CELL_STYLE, width: 32 }} />
                         {columns.map(col => {
                           const val = childRow[col.accessorKey]
@@ -197,6 +215,8 @@ export default function DataTable({ data, columns, defaultSort }) {
           </tbody>
         </table>
       </div>
+
+      <DetailPanel row={selectedRow} onClose={() => setSelectedRow(null)} />
     </div>
   )
 }
