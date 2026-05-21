@@ -1,29 +1,42 @@
 import secrets
 import os
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from dotenv import load_dotenv
+from passlib.hash import bcrypt
 
 load_dotenv("/opt/rita-gui/.env")
 
 from backend.routers import beaconing, datasets, longconns, dns, threatintel, strobe
 
 app = FastAPI(title="RITA GUI", version="0.1.0")
-security = HTTPBasic()
+security = HTTPBasic(auto_error=False)
 
 GUI_USERNAME = os.getenv("GUI_USERNAME", "admin")
-GUI_PASSWORD = os.getenv("GUI_PASSWORD", "changeme")
+GUI_PASSWORD_HASH = os.getenv("GUI_PASSWORD_HASH", "")
 
 def require_auth(credentials: HTTPBasicCredentials = Depends(security)):
-    ok_user = secrets.compare_digest(credentials.username.encode(), GUI_USERNAME.encode())
-    ok_pass = secrets.compare_digest(credentials.password.encode(), GUI_PASSWORD.encode())
+    if not credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+        )
+    ok_user = secrets.compare_digest(
+        credentials.username.encode(),
+        GUI_USERNAME.encode()
+    )
+    ok_pass = False
+    try:
+        ok_pass = bcrypt.verify(credentials.password, GUI_PASSWORD_HASH)
+    except Exception:
+        ok_pass = False
+
     if not (ok_user and ok_pass):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
-            headers={"WWW-Authenticate": "Basic"},
         )
     return credentials.username
 
