@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Query
 from backend.db import get_client
 from backend.time_filter import time_condition
+from backend.suppression_filter import get_suppression_conditions
 from typing import Optional
 
 router = APIRouter(prefix="/api/dns", tags=["dns"])
@@ -16,14 +17,16 @@ def get_dns(
     beacon_type: Optional[str] = Query(None),
     threat_intel_only: bool = Query(False),
     protocol: Optional[str] = Query(None),
+    show_suppressed: bool = Query(False),
 ):
     client = get_client()
     time_cond = time_condition(since_hours, date_from, date_to)
+    supp_cond = get_suppression_conditions(dataset, show_suppressed)
     conditions = [f"c2_over_dns_score >= %(min_score)s", "c2_over_dns_score > 0"]
     if beacon_type: conditions.append("beacon_type = %(beacon_type)s")
     if threat_intel_only: conditions.append("threat_intel = true")
     if protocol: conditions.append("has(port_proto_service, %(protocol)s)")
-    where = " AND ".join(conditions) + f" {time_cond}"
+    where = " AND ".join(conditions) + f" {time_cond} {supp_cond}"
     query = f"""
         SELECT
             IPv6NumToString(src) AS src, IPv6NumToString(dst) AS dst,

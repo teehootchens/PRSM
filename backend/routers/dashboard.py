@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Query
 from backend.db import get_client
 from backend.time_filter import time_condition
+from backend.suppression_filter import get_suppression_conditions
 from typing import Optional
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -15,9 +16,11 @@ def get_dashboard(
     beacon_type: Optional[str] = Query(None),
     threat_intel_only: bool = Query(False),
     protocol: Optional[str] = Query(None),
+    show_suppressed: bool = Query(False),
 ):
     client = get_client()
     time_cond = time_condition(since_hours, date_from, date_to)
+    supp_cond = get_suppression_conditions(dataset, show_suppressed)
 
     base = []
     if beacon_type: base.append(f"beacon_type = '{beacon_type}'")
