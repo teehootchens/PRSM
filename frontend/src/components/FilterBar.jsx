@@ -15,6 +15,7 @@ export default function FilterBar() {
     beaconType,     setBeaconType,
     threatIntelOnly,setThreatIntelOnly,
     protocol,       setProtocol,
+    showSuppressed, setShowSuppressed,
   } = useFilters()
 
   const [protocols, setProtocols] = useState([])
@@ -43,7 +44,7 @@ export default function FilterBar() {
     colorScheme: 'dark',
   }
 
-  const hasFilters = dateRangeHours || minScore > 0 || beaconType || protocol || threatIntelOnly
+  const hasFilters = dateRangeHours || minScore > 0 || beaconType || protocol || threatIntelOnly || showSuppressed
 
   return (
     <div style={{
@@ -148,6 +149,24 @@ export default function FilterBar() {
         </button>
       </div>
 
+      {/* Show Suppressed */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+        <span style={labelStyle}>Suppressed</span>
+        <button
+          onClick={() => setShowSuppressed(!showSuppressed)}
+          style={{
+            background: showSuppressed ? '#f9731622' : '#1a1d27',
+            border: `1px solid ${showSuppressed ? '#f97316' : '#2d3148'}`,
+            color: showSuppressed ? '#f97316' : '#64748b',
+            borderRadius: 6, padding: '0.25rem 0.6rem',
+            cursor: 'pointer', fontSize: 12, fontWeight: 600,
+            transition: 'all 0.15s',
+          }}
+        >
+          {showSuppressed ? '● Show' : '○ Hide'}
+        </button>
+      </div>
+
       {/* Reset */}
       {hasFilters && (
         <button
@@ -159,6 +178,7 @@ export default function FilterBar() {
             setBeaconType('')
             setProtocol('')
             setThreatIntelOnly(false)
+            setShowSuppressed(false)
           }}
           style={{
             background: 'none', border: '1px solid #2d3148', color: '#475569',

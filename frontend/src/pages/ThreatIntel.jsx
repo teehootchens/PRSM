@@ -10,11 +10,12 @@ import { formatIP, formatBytes } from '../utils'
 export default function ThreatIntel() {
   const { credentials } = useAuth()
   const { datasets, setDatasets, dataset, setDataset } = useDataset()
-  const { dateRangeHours, customDateFrom, customDateTo, minScore, beaconType, threatIntelOnly, protocol } = useFilters()
+  const { dateRangeHours, customDateFrom, customDateTo, minScore, beaconType, threatIntelOnly, protocol, showSuppressed } = useFilters()
   const auth = { auth: credentials }
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
     if (datasets.length) return
@@ -34,11 +35,12 @@ export default function ThreatIntel() {
       date_to: dateRangeHours === 'custom' ? customDateTo || undefined : undefined,
       beacon_type: beaconType || undefined,
       protocol: protocol || undefined,
+      show_suppressed: showSuppressed === true ? true : undefined,
     }})
       .then(r => setData(r.data.results))
       .catch(() => setError('Failed to load threat intel data'))
       .finally(() => setLoading(false))
-  }, [dataset, minScore, dateRangeHours, customDateFrom, customDateTo, beaconType, threatIntelOnly, protocol])
+  }, [dataset, minScore, dateRangeHours, customDateFrom, customDateTo, beaconType, threatIntelOnly, protocol, showSuppressed, refreshKey])
 
   const columns = useMemo(() => [
     { accessorKey: 'threat_intel_score', header: 'TI Score', cell: ({ getValue }) => <ScoreBadge value={getValue()} /> },
@@ -65,7 +67,7 @@ export default function ThreatIntel() {
         </div>
       )}
       {!loading && data.length > 0 && (
-        <DataTable data={data} columns={columns} defaultSort={[{ id: 'threat_intel_score', desc: true }]} />
+        <DataTable data={data} columns={columns} onRefresh={() => setRefreshKey(k => k + 1)} defaultSort={[{ id: 'threat_intel_score', desc: true }]} />
       )}
     </div>
   )

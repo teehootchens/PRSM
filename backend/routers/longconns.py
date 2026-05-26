@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Query
 from backend.db import get_client
 from backend.time_filter import time_condition
-from backend.suppression_filter import get_suppression_conditions
+from backend.suppression_filter import get_suppression_conditions, get_suppressed_values
 from typing import Optional
 
 router = APIRouter(prefix="/api/longconns", tags=["longconns"])
@@ -22,11 +22,13 @@ def get_longconns(
     client = get_client()
     time_cond = time_condition(since_hours, date_from, date_to)
     supp_cond = get_suppression_conditions(dataset, show_suppressed)
-    conditions = [f"long_conn_score >= %(min_score)s", "long_conn_score > 0"]
-    if beacon_type: conditions.append("beacon_type = %(beacon_type)s")
+
+    conditions = [f"long_conn_score >= {min_score}", "long_conn_score > 0"]
+    if beacon_type: conditions.append(f"beacon_type = '{beacon_type}'")
     if threat_intel_only: conditions.append("threat_intel = true")
-    if protocol: conditions.append("has(port_proto_service, %(protocol)s)")
+    if protocol: conditions.append(f"has(port_proto_service, '{protocol}')")
     where = " AND ".join(conditions) + f" {time_cond} {supp_cond}"
+
     query = f"""
         SELECT
             IPv6NumToString(src) AS src, IPv6NumToString(dst) AS dst,
@@ -38,11 +40,26 @@ def get_longconns(
             c2_over_dns_score, strobe_score, prevalence,
             prevalence_score, prevalence_total, network_size,
             missing_host_count, first_seen_score
-        FROM `{dataset}`.threat_mixtape
-        WHERE {where}
-        ORDER BY long_conn_score DESC
-        LIMIT %(limit)s
+        FROM (
+            SELECT * FROM `{dataset}`.threat_mixtape
+            WHERE {where}
+            ORDER BY long_conn_score DESC
+            LIMIT {limit}
+        )
     """
-    result = client.query(query, parameters={"min_score": min_score, "limit": limit, "beacon_type": beacon_type or "", "protocol": protocol or ""})
+    result = client.query(query)
     rows = [dict(zip(result.column_names, row)) for row in result.result_rows]
+    if show_suppressed:
+        suppressed = get_suppressed_values(dataset)
+        for row in rows:
+            src_ip = row.get('src', '').replace('::ffff:', '')
+            dst_ip = row.get('dst', '').replace('::ffff:', '')
+            row['is_suppressed'] = (
+                src_ip in suppressed['src'] or
+                dst_ip in suppressed['dst'] or
+                row.get('fqdn', '') in suppressed['fqdn']
+            )
+    else:
+        for row in rows:
+            row['is_suppressed'] = False
     return {"dataset": dataset, "count": len(rows), "results": rows}

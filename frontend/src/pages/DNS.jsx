@@ -10,11 +10,12 @@ import { formatIP } from '../utils'
 export default function DNS() {
   const { credentials } = useAuth()
   const { datasets, setDatasets, dataset, setDataset } = useDataset()
-  const { dateRangeHours, customDateFrom, customDateTo, minScore, beaconType, threatIntelOnly, protocol } = useFilters()
+  const { dateRangeHours, customDateFrom, customDateTo, minScore, beaconType, threatIntelOnly, protocol, showSuppressed } = useFilters()
   const auth = { auth: credentials }
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
     if (datasets.length) return
@@ -33,13 +34,14 @@ export default function DNS() {
       date_from: dateRangeHours === 'custom' ? customDateFrom || undefined : undefined,
       date_to: dateRangeHours === 'custom' ? customDateTo || undefined : undefined,
       beacon_type: beaconType || undefined,
-      threat_intel_only: threatIntelOnly || undefined,
+      threat_intel_only: threatIntelOnly === true ? true : undefined,
       protocol: protocol || undefined,
+      show_suppressed: showSuppressed === true ? true : undefined,
     }})
       .then(r => setData(r.data.results))
       .catch(() => setError('Failed to load DNS data'))
       .finally(() => setLoading(false))
-  }, [dataset, minScore, dateRangeHours, customDateFrom, customDateTo, beaconType, threatIntelOnly, protocol])
+  }, [dataset, minScore, dateRangeHours, customDateFrom, customDateTo, beaconType, threatIntelOnly, protocol, showSuppressed, refreshKey])
 
   const columns = useMemo(() => [
     { accessorKey: 'c2_over_dns_score', header: 'C2/DNS Score', cell: ({ getValue }) => <ScoreBadge value={getValue()} /> },
@@ -59,7 +61,7 @@ export default function DNS() {
       <FilterBar />
       {error && <div style={{ color: '#ef4444', marginBottom: '1rem' }}>{error}</div>}
       {loading && <div style={{ color: '#7c85f5' }}>Loading...</div>}
-      {!loading && <DataTable data={data} columns={columns} defaultSort={[{ id: 'c2_over_dns_score', desc: true }]} />}
+      {!loading && <DataTable data={data} columns={columns} onRefresh={() => setRefreshKey(k => k + 1)} defaultSort={[{ id: 'c2_over_dns_score', desc: true }]} />}
     </div>
   )
 }

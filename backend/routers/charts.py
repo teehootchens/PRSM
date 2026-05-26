@@ -29,6 +29,8 @@ def get_charts(
     ti_where = "AND threat_intel = true" if threat_intel_only else ""
     ms = min_score
 
+    inner_where = f"WHERE 1=1 {ti_where} {base_where} {time_cond} {supp_cond}"
+
     trend = client.query(f"""
         SELECT
             toDate(last_seen) AS day,
@@ -37,8 +39,10 @@ def get_charts(
             countIf(long_conn_score >= {ms} AND long_conn_score > 0) AS long_conns,
             countIf(c2_over_dns_score >= {ms} AND c2_over_dns_score > 0) AS dns,
             countIf(strobe_score >= {ms} AND strobe_score > 0) AS strobe
-        FROM `{dataset}`.threat_mixtape
-        WHERE 1=1 {ti_where} {base_where} {time_cond}
+        FROM (
+            SELECT * FROM `{dataset}`.threat_mixtape
+            {inner_where}
+        )
         GROUP BY day ORDER BY day
     """)
 
@@ -54,8 +58,10 @@ def get_charts(
             countIf(beacon_threat_score >= 0.50 AND beacon_threat_score < 0.75) AS high,
             countIf(beacon_threat_score >= 0.25 AND beacon_threat_score < 0.50) AS medium,
             countIf(beacon_threat_score > 0     AND beacon_threat_score < 0.25) AS low
-        FROM `{dataset}`.threat_mixtape
-        WHERE 1=1 {ti_where} {base_where} {time_cond}
+        FROM (
+            SELECT * FROM `{dataset}`.threat_mixtape
+            {inner_where}
+        )
     """)
 
     dist_row = dist.result_rows[0] if dist.result_rows else (0, 0, 0, 0)

@@ -8,6 +8,7 @@ import LongConns from './pages/LongConns.jsx'
 import DNS from './pages/DNS.jsx'
 import ThreatIntel from './pages/ThreatIntel.jsx'
 import Strobe from './pages/Strobe.jsx'
+import Whitelist from './pages/Whitelist.jsx'
 import Login from './pages/Login.jsx'
 import './App.css'
 
@@ -38,6 +39,7 @@ function ActiveFiltersBadge() {
     beaconType, setBeaconType,
     threatIntelOnly, setThreatIntelOnly,
     protocol, setProtocol,
+    showSuppressed, setShowSuppressed,
     globalFilter, setGlobalFilter,
   } = useFilters()
 
@@ -49,6 +51,7 @@ function ActiveFiltersBadge() {
     beaconType && { label: `Type: ${beaconType}`, clear: () => setBeaconType('') },
     protocol && { label: protocol, clear: () => setProtocol('') },
     threatIntelOnly && { label: '⚠ TI ONLY', clear: () => setThreatIntelOnly(false), warn: true },
+    showSuppressed && { label: '👁 SHOW SUPPRESSED', clear: () => setShowSuppressed(false), warn: false },
   ].filter(Boolean)
 
   if (active.length === 0) return null
@@ -81,8 +84,8 @@ function ActiveFiltersBadge() {
       ))}
       <button
         onClick={() => {
-          setGlobalFilter(''); setDateRangeHours(null); setMinScore(0)
-          setBeaconType(''); setProtocol(''); setThreatIntelOnly(false)
+          setGlobalFilter(''); setDateRangeHours(null); setCustomDateFrom(''); setCustomDateTo(''); setMinScore(0)
+          setBeaconType(''); setProtocol(''); setThreatIntelOnly(false); setShowSuppressed(false)
         }}
         style={{
           marginTop: '0.3rem', background: 'none', border: '1px solid #475569',
@@ -110,6 +113,7 @@ function Shell() {
         <NavLink to="/dns" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>DNS Analysis</NavLink>
         <NavLink to="/threatintel" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Threat Intel</NavLink>
         <NavLink to="/strobe" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Strobe Detection</NavLink>
+        <NavLink to="/whitelist" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Suppression List</NavLink>
         <div style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid #2d3148' }}>
           <button onClick={logout} style={{
             background: 'none', border: 'none', color: '#475569',
@@ -125,6 +129,7 @@ function Shell() {
           <Route path="/dns" element={<DNS />} />
           <Route path="/threatintel" element={<ThreatIntel />} />
           <Route path="/strobe" element={<Strobe />} />
+          <Route path="/whitelist" element={<Whitelist />} />
         </Routes>
       </main>
     </div>

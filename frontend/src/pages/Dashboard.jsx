@@ -347,7 +347,7 @@ function DistChart({ data }) {
 export default function Dashboard() {
   const { credentials } = useAuth()
   const { datasets, setDatasets, dataset, setDataset } = useDataset()
-  const { dateRangeHours, setDateRangeHours, customDateFrom, setCustomDateFrom, customDateTo, setCustomDateTo, minScore, beaconType, threatIntelOnly, setThreatIntelOnly, protocol, globalFilter, setGlobalFilter } = useFilters()
+  const { dateRangeHours, setDateRangeHours, customDateFrom, setCustomDateFrom, customDateTo, setCustomDateTo, minScore, beaconType, threatIntelOnly, setThreatIntelOnly, protocol, showSuppressed, globalFilter, setGlobalFilter } = useFilters()
   const auth = { auth: credentials }
   const navigate = useNavigate()
   const [data, setData] = useState(null)
@@ -397,6 +397,7 @@ export default function Dashboard() {
     beacon_type: beaconType || undefined,
     threat_intel_only: threatIntelOnly || undefined,
     protocol: protocol || undefined,
+    show_suppressed: showSuppressed === true ? true : undefined,
   }
 
   useEffect(() => {
@@ -409,7 +410,7 @@ export default function Dashboard() {
       .then(([dash, charts]) => { setData(dash.data); setChartData(charts.data) })
       .catch(() => setError('Failed to load dashboard'))
       .finally(() => setLoading(false))
-  }, [dataset, minScore, dateRangeHours, customDateFrom, customDateTo, beaconType, threatIntelOnly, protocol])
+  }, [dataset, minScore, dateRangeHours, customDateFrom, customDateTo, beaconType, threatIntelOnly, protocol, showSuppressed])
 
   const handleIPClick = (ip) => {
     setGlobalFilter(ip)

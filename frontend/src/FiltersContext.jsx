@@ -28,6 +28,7 @@ export function FiltersProvider({ children }) {
   const [beaconType,      setBeaconTypeState]       = useState(() => load('rita_beacon_type', ''))
   const [threatIntelOnly, setThreatIntelOnlyState]  = useState(() => load('rita_ti_only', false))
   const [protocol,        setProtocolState]         = useState(() => load('rita_protocol', ''))
+  const [showSuppressed,  setShowSuppressedState]   = useState(() => load('rita_show_suppressed', false))
 
   const setGlobalFilter    = v => { save('rita_filter', v);        setGlobalFilterState(v) }
   const setDateRangeHours  = v => { save('rita_date_hours', v);    setDateRangeHoursState(v) }
@@ -37,6 +38,7 @@ export function FiltersProvider({ children }) {
   const setBeaconType      = v => { save('rita_beacon_type', v);   setBeaconTypeState(v) }
   const setThreatIntelOnly = v => { save('rita_ti_only', v);       setThreatIntelOnlyState(v) }
   const setProtocol        = v => { save('rita_protocol', v);      setProtocolState(v) }
+  const setShowSuppressed  = v => { save('rita_show_suppressed', v); setShowSuppressedState(v) }
 
   return (
     <FiltersContext.Provider value={{
@@ -48,6 +50,7 @@ export function FiltersProvider({ children }) {
       beaconType,      setBeaconType,
       threatIntelOnly, setThreatIntelOnly,
       protocol,        setProtocol,
+      showSuppressed,  setShowSuppressed,
     }}>
       {children}
     </FiltersContext.Provider>

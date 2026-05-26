@@ -9,7 +9,7 @@ from passlib.hash import bcrypt
 
 load_dotenv("/opt/rita-gui/.env")
 
-from backend.routers import beaconing, datasets, longconns, dns, threatintel, strobe, dashboard, protocols, charts, whitelist, whitelist
+from backend.routers import beaconing, datasets, longconns, dns, threatintel, strobe, dashboard, protocols, charts, whitelist
 
 app = FastAPI(title="RITA GUI", version="0.1.0")
 security = HTTPBasic(auto_error=False)

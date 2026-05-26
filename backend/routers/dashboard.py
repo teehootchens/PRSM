@@ -30,27 +30,42 @@ def get_dashboard(
 
     def where(*extra):
         conditions = list(extra)
-        return "WHERE 1=1 " + ti_where + base_where + f" {time_cond}" + (" AND " + " AND ".join(conditions) if conditions else "")
+        extra_str = (" AND " + " AND ".join(conditions)) if conditions else ""
+        return f"WHERE 1=1 {ti_where} {base_where} {time_cond} {supp_cond}{extra_str}"
 
     def count(extra):
-        r = client.query(f"SELECT count() FROM `{dataset}`.threat_mixtape {where(extra)}")
+        r = client.query(f"""
+            SELECT count() FROM (
+                SELECT * FROM `{dataset}`.threat_mixtape
+                {where(extra)}
+            )
+        """)
         return r.result_rows[0][0] if r.result_rows else 0
 
     def top(score_col, extra, n=5):
         r = client.query(f"""
             SELECT
-                IPv6NumToString(src) AS src, IPv6NumToString(dst) AS dst,
+                IPv6NumToString(src) AS src,
+                IPv6NumToString(dst) AS dst,
                 fqdn, {score_col}, threat_intel,
                 total_duration, total_bytes, count, modifier_name
-            FROM `{dataset}`.threat_mixtape
-            {where(extra)}
-            ORDER BY {score_col} DESC
-            LIMIT {n}
+            FROM (
+                SELECT * FROM `{dataset}`.threat_mixtape
+                {where(extra)}
+                ORDER BY {score_col} DESC
+                LIMIT {n}
+            )
         """)
         return [dict(zip(r.column_names, row)) for row in r.result_rows]
 
     def timerange():
-        r = client.query(f"SELECT max(last_seen), min(last_seen) FROM `{dataset}`.threat_mixtape {where()}")
+        r = client.query(f"""
+            SELECT max(last_seen), min(last_seen)
+            FROM (
+                SELECT * FROM `{dataset}`.threat_mixtape
+                {where()}
+            )
+        """)
         row = r.result_rows[0] if r.result_rows else (None, None)
         return {"latest": str(row[0]) if row[0] else None, "earliest": str(row[1]) if row[1] else None}
 

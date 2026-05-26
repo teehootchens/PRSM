@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import {
   useReactTable, getCoreRowModel, getSortedRowModel,
   getFilteredRowModel, flexRender,
@@ -6,6 +6,8 @@ import {
 import { formatIP } from '../utils'
 import { useFilters } from '../FiltersContext'
 import DetailPanel from './DetailPanel'
+import ContextMenu from './ContextMenu'
+import SuppressDialog from './SuppressDialog'
 
 export function ScoreBadge({ value }) {
   const pct = Math.round((value || 0) * 100)
@@ -43,11 +45,13 @@ const TH_STYLE = {
 
 const CLICKABLE = ['src', 'dst', 'fqdn']
 
-export default function DataTable({ data, columns, defaultSort }) {
+export default function DataTable({ data, columns, defaultSort, onRefresh }) {
   const [sorting, setSorting] = useState(defaultSort || [])
   const { globalFilter, setGlobalFilter } = useFilters()
   const [expanded, setExpanded] = useState({})
   const [selectedRow, setSelectedRow] = useState(null)
+  const [contextMenu, setContextMenu] = useState(null)
+  const [suppressDialog, setSuppressDialog] = useState(null)
 
   const { grouped, flatPrimary } = useMemo(() => {
     const grouped = {}
@@ -80,16 +84,61 @@ export default function DataTable({ data, columns, defaultSort }) {
     getFilteredRowModel: getFilteredRowModel(),
   })
 
-  const handleCellClick = (e, colId, value, rowData) => {
+  const handleCellClick = (e, colId, value) => {
     if (CLICKABLE.includes(colId) && value) {
       e.stopPropagation()
       setGlobalFilter(formatIP(value))
     }
   }
 
-  const handleRowClick = (rowData) => {
-    setSelectedRow(rowData)
-  }
+  const handleRowClick = (rowData) => setSelectedRow(rowData)
+
+  const handleContextMenu = useCallback((e, rowData) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const srcIP = formatIP(rowData.src)
+    const dstIP = formatIP(rowData.dst)
+    const fqdn  = rowData.fqdn
+
+    const items = []
+
+    if (srcIP) {
+      items.push({
+        icon: '🚫',
+        label: `Suppress src: ${srcIP}`,
+        onClick: () => setSuppressDialog({ row: rowData, valueType: 'src' }),
+      })
+    }
+    if (dstIP) {
+      items.push({
+        icon: '🚫',
+        label: `Suppress dst: ${dstIP}`,
+        onClick: () => setSuppressDialog({ row: rowData, valueType: 'dst' }),
+      })
+    }
+    if (fqdn) {
+      items.push({
+        icon: '🚫',
+        label: `Suppress FQDN: ${fqdn}`,
+        onClick: () => setSuppressDialog({ row: rowData, valueType: 'fqdn' }),
+      })
+    }
+
+    items.push('divider')
+    items.push({
+      icon: '🔍',
+      label: srcIP ? `Filter by ${srcIP}` : 'Filter',
+      onClick: () => setGlobalFilter(srcIP),
+    })
+    items.push({
+      icon: '📋',
+      label: 'View details',
+      onClick: () => setSelectedRow(rowData),
+    })
+
+    setContextMenu({ x: e.clientX, y: e.clientY, items, row: rowData })
+  }, [setGlobalFilter])
 
   const toggleExpand = (e, key) => {
     e.stopPropagation()
@@ -148,12 +197,16 @@ export default function DataTable({ data, columns, defaultSort }) {
                 <tr
                   key={`row-${row.id}`}
                   onClick={() => handleRowClick(row.original)}
+                  onContextMenu={e => handleContextMenu(e, row.original)}
                   style={{
-                    background: i % 2 === 0 ? '#0f1117' : '#13161f',
+                    background: row.original.is_suppressed
+                      ? 'rgba(239,68,68,0.07)'
+                      : i % 2 === 0 ? '#0f1117' : '#13161f',
                     cursor: 'pointer',
+                    borderLeft: row.original.is_suppressed ? '3px solid #ef444466' : '3px solid transparent',
                   }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#1a1d27'}
-                  onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? '#0f1117' : '#13161f'}
+                  onMouseEnter={e => e.currentTarget.style.background = row.original.is_suppressed ? 'rgba(239,68,68,0.12)' : '#1a1d27'}
+                  onMouseLeave={e => e.currentTarget.style.background = row.original.is_suppressed ? 'rgba(239,68,68,0.07)' : i % 2 === 0 ? '#0f1117' : '#13161f'}
                 >
                   <td
                     style={{ ...CELL_STYLE, width: 32, textAlign: 'center' }}
@@ -179,8 +232,8 @@ export default function DataTable({ data, columns, defaultSort }) {
                           color: isClickable && rawVal ? '#93c5fd' : 'inherit',
                           textDecoration: isClickable && rawVal ? 'underline dotted' : 'none',
                         }}
-                        onClick={e => handleCellClick(e, colId, rawVal, row.original)}
-                        title={isClickable && rawVal ? `Filter by ${formatIP(rawVal)}` : 'Click row for details'}
+                        onClick={e => handleCellClick(e, colId, rawVal)}
+                        title={isClickable && rawVal ? `Filter by ${formatIP(rawVal)}` : 'Right-click for options'}
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
@@ -193,6 +246,7 @@ export default function DataTable({ data, columns, defaultSort }) {
                         key={`${key}-child-${ci}`}
                         style={{ background: '#0d1020', cursor: 'pointer' }}
                         onClick={() => handleRowClick(childRow)}
+                        onContextMenu={e => handleContextMenu(e, childRow)}
                         onMouseEnter={e => e.currentTarget.style.background = '#1a1d27'}
                         onMouseLeave={e => e.currentTarget.style.background = '#0d1020'}
                       >
@@ -217,6 +271,27 @@ export default function DataTable({ data, columns, defaultSort }) {
       </div>
 
       <DetailPanel row={selectedRow} onClose={() => setSelectedRow(null)} />
+
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenu.items}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
+
+      {suppressDialog && (
+        <SuppressDialog
+          row={suppressDialog.row}
+          valueType={suppressDialog.valueType}
+          onClose={() => setSuppressDialog(null)}
+          onSuccess={() => {
+            setSuppressDialog(null)
+            if (onRefresh) onRefresh()
+          }}
+        />
+      )}
     </div>
   )
 }
