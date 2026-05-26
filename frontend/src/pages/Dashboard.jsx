@@ -1,10 +1,12 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '../AuthContext'
 import { useDataset } from '../DatasetContext'
 import { useFilters } from '../FiltersContext'
 import FilterBar from '../components/FilterBar'
+import ContextMenu from '../components/ContextMenu'
+import SuppressDialog from '../components/SuppressDialog'
 import { formatIP } from '../utils'
 
 function formatDur(seconds) {
@@ -49,7 +51,7 @@ function StatCard({ label, value, color, onClick }) {
   )
 }
 
-function TopTable({ title, rows, scoreKey, color, onIPClick, extraCols = [] }) {
+function TopTable({ title, rows, scoreKey, color, onIPClick, extraCols = [], onRowContextMenu }) {
   if (!rows || rows.length === 0) return (
     <div style={{ background: '#1a1d27', border: '1px solid #2d3148', borderRadius: 8, overflow: 'hidden' }}>
       <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #2d3148', color, fontWeight: 600, fontSize: 13 }}>{title}</div>
@@ -72,7 +74,8 @@ function TopTable({ title, rows, scoreKey, color, onIPClick, extraCols = [] }) {
             const pct = Math.round((row[scoreKey] || 0) * 100)
             const sc = pct >= 75 ? '#ef4444' : pct >= 50 ? '#f97316' : pct >= 25 ? '#eab308' : '#22c55e'
             return (
-              <tr key={i} style={{ borderTop: '1px solid #1e2235' }}>
+              <tr key={i} style={{ borderTop: '1px solid #1e2235', cursor: 'context-menu' }}
+                onContextMenu={e => onRowContextMenu && onRowContextMenu(e, row)}>
                 <td style={{ padding: '0.4rem 0.75rem', whiteSpace: 'nowrap' }}>
                   {row.threat_intel ? <span style={{ color: '#ef4444', fontWeight: 700, fontSize: 12 }}>YES</span> : <span style={{ color: '#475569', fontSize: 12 }}>—</span>}
                 </td>
@@ -105,7 +108,7 @@ const SERIES = [
   { key: 'threat_intel', label: 'Threat Intel',  color: '#ef4444', dash: [5,3], fill: false },
   { key: 'long_conns',   label: 'Long Conns',    color: '#e2e8f0', dash: [2,2], fill: false },
   { key: 'dns',          label: 'C2/DNS',        color: '#eab308', dash: [4,2], fill: false },
-  { key: 'strobe',       label: 'Strobe',         color: '#f97316', dash: [3,3], fill: false },
+  { key: 'strobe',       label: 'Strobe',        color: '#f97316', dash: [3,3], fill: false },
 ]
 
 function TrendChart({ data, onApplyRange }) {
@@ -170,26 +173,18 @@ function TrendChart({ data, onApplyRange }) {
         responsive: true, maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
-          tooltip: {
-            backgroundColor: '#1a1d27', borderColor: '#2d3148',
-            borderWidth: 1, titleColor: '#94a3b8', bodyColor: '#e2e8f0'
-          },
+          tooltip: { backgroundColor: '#1a1d27', borderColor: '#2d3148', borderWidth: 1, titleColor: '#94a3b8', bodyColor: '#e2e8f0' },
           zoom: zoomPlugin ? {
             zoom: {
-              drag: {
-                enabled: true,
-                backgroundColor: '#7c85f522',
-                borderColor: '#7c85f5',
-                borderWidth: 1,
-              },
+              drag: { enabled: true, backgroundColor: '#7c85f522', borderColor: '#7c85f5', borderWidth: 1 },
               mode: 'x',
               onZoomComplete: ({ chart }) => {
                 setIsZoomed(true)
                 const { min, max } = chart.scales.x
-                const minLabel = labels[Math.round(min)]
-                const maxLabel = labels[Math.min(Math.round(max), labels.length - 1)]
                 const minDay = data[Math.max(0, Math.round(min))]?.day
                 const maxDay = data[Math.min(data.length - 1, Math.round(max))]?.day
+                const minLabel = labels[Math.max(0, Math.round(min))]
+                const maxLabel = labels[Math.min(labels.length - 1, Math.round(max))]
                 setZoomedRange({ minLabel, maxLabel, minDay, maxDay })
               }
             }
@@ -215,64 +210,37 @@ function TrendChart({ data, onApplyRange }) {
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           {isZoomed && zoomedRange && (
             <>
-              <span style={{ fontSize: 11, color: '#7c85f5' }}>
-                {zoomedRange.minLabel} — {zoomedRange.maxLabel}
-              </span>
-              <button
-                onClick={() => {
-                  if (zoomedRange.minDay && zoomedRange.maxDay && onApplyRange) {
-                    onApplyRange(zoomedRange.minDay, zoomedRange.maxDay)
-                  }
-                }}
-                style={{
-                  background: '#7c85f522', border: '1px solid #7c85f5',
-                  color: '#7c85f5', borderRadius: 4, padding: '2px 8px',
-                  cursor: 'pointer', fontSize: 11, fontWeight: 600,
-                }}
-              >
+              <span style={{ fontSize: 11, color: '#7c85f5' }}>{zoomedRange.minLabel} — {zoomedRange.maxLabel}</span>
+              <button onClick={() => { if (zoomedRange.minDay && zoomedRange.maxDay && onApplyRange) onApplyRange(zoomedRange.minDay, zoomedRange.maxDay) }}
+                style={{ background: '#7c85f522', border: '1px solid #7c85f5', color: '#7c85f5', borderRadius: 4, padding: '2px 8px', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
                 Apply as filter
               </button>
-              <button
-                onClick={resetZoom}
-                style={{
-                  background: 'none', border: '1px solid #2d3148',
-                  color: '#475569', borderRadius: 4, padding: '2px 8px',
-                  cursor: 'pointer', fontSize: 11,
-                }}
-              >
+              <button onClick={resetZoom}
+                style={{ background: 'none', border: '1px solid #2d3148', color: '#475569', borderRadius: 4, padding: '2px 8px', cursor: 'pointer', fontSize: 11 }}>
                 Reset zoom
               </button>
             </>
           )}
         </div>
       </div>
-
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
         {SERIES.map(s => {
           const on = active[s.key]
           return (
-            <button
-              key={s.key}
-              onClick={() => toggleSeries(s.key)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                background: on ? s.color + '22' : '#1e2235',
-                border: `1px solid ${on ? s.color : '#2d3148'}`,
-                borderRadius: 4, padding: '2px 8px', cursor: 'pointer',
-                color: on ? s.color : '#475569', fontSize: 11, fontWeight: on ? 600 : 400,
-                transition: 'all 0.15s',
-              }}
-            >
-              <span style={{
-                width: 16, height: 0, display: 'inline-block',
-                borderTop: `2px ${Array.isArray(s.dash) ? 'dashed' : 'solid'} ${on ? s.color : '#475569'}`
-              }} />
+            <button key={s.key} onClick={() => toggleSeries(s.key)} style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              background: on ? s.color + '22' : '#1e2235',
+              border: `1px solid ${on ? s.color : '#2d3148'}`,
+              borderRadius: 4, padding: '2px 8px', cursor: 'pointer',
+              color: on ? s.color : '#475569', fontSize: 11, fontWeight: on ? 600 : 400,
+              transition: 'all 0.15s',
+            }}>
+              <span style={{ width: 16, height: 0, display: 'inline-block', borderTop: `2px ${Array.isArray(s.dash) ? 'dashed' : 'solid'} ${on ? s.color : '#475569'}` }} />
               {s.label}
             </button>
           )
         })}
       </div>
-
       <div style={{ position: 'relative', height: 260 }}>
         <canvas ref={canvasRef} role="img" aria-label="Line chart showing detection trends over time" />
       </div>
@@ -287,7 +255,6 @@ function DistChart({ data }) {
   useEffect(() => {
     if (!data || !canvasRef.current) return
     if (typeof window.Chart === 'undefined') return
-
     if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null }
 
     const total = (data.critical + data.high + data.medium + data.low) || 1
@@ -296,7 +263,7 @@ function DistChart({ data }) {
       type: 'bar',
       data: {
         labels: [
-          `Critical ≥75% (${data.critical})`,
+          `Critical >=75% (${data.critical})`,
           `High 50-75% (${data.high})`,
           `Medium 25-50% (${data.medium})`,
           `Low <25% (${data.low})`,
@@ -305,24 +272,17 @@ function DistChart({ data }) {
           data: [data.critical, data.high, data.medium, data.low],
           backgroundColor: ['#ef444488', '#f9731688', '#eab30888', '#22c55e88'],
           borderColor:     ['#ef4444',   '#f97316',   '#eab308',   '#22c55e'],
-          borderWidth: 1,
-          borderRadius: 4,
+          borderWidth: 1, borderRadius: 4,
         }]
       },
       options: {
-        indexAxis: 'y',
-        responsive: true, maintainAspectRatio: false,
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
           tooltip: {
             backgroundColor: '#1a1d27', borderColor: '#2d3148', borderWidth: 1,
             titleColor: '#94a3b8', bodyColor: '#e2e8f0',
-            callbacks: {
-              label: ctx => {
-                const pct = Math.round((ctx.parsed.x / total) * 100)
-                return ` ${ctx.parsed.x} detections (${pct}%)`
-              }
-            }
+            callbacks: { label: ctx => ` ${ctx.parsed.x} detections (${Math.round((ctx.parsed.x / total) * 100)}%)` }
           }
         },
         scales: {
@@ -338,7 +298,7 @@ function DistChart({ data }) {
     <div style={{ background: '#1a1d27', border: '1px solid #2d3148', borderRadius: 8, padding: '1rem' }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', marginBottom: '0.75rem' }}>Score distribution</div>
       <div style={{ position: 'relative', height: 160 }}>
-        <canvas ref={canvasRef} role="img" aria-label="Horizontal bar chart showing score distribution across critical, high, medium, and low severity" />
+        <canvas ref={canvasRef} role="img" aria-label="Horizontal bar chart showing score distribution" />
       </div>
     </div>
   )
@@ -355,26 +315,20 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [chartjsLoaded, setChartjsLoaded] = useState(false)
+  const [contextMenu, setContextMenu] = useState(null)
+  const [suppressDialog, setSuppressDialog] = useState(null)
+  const [refreshKey, setRefreshKey] = useState(0)
 
-  // Load Chart.js + zoom plugin
   useEffect(() => {
     if (window.Chart && window.ChartZoom) { setChartjsLoaded(true); return }
     const loadScript = (src) => new Promise(resolve => {
-      const s = document.createElement('script')
-      s.src = src
-      s.onload = resolve
-      document.head.appendChild(s)
+      const s = document.createElement('script'); s.src = src; s.onload = resolve; document.head.appendChild(s)
     })
     const load = async () => {
-      if (!window.Chart) {
-        await loadScript('https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js')
-      }
+      if (!window.Chart) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js')
       if (!window.ChartZoom) {
         await loadScript('https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js')
-        if (window['chartjs-plugin-zoom']) {
-          window.ChartZoom = window['chartjs-plugin-zoom']
-          window.Chart.register(window.ChartZoom)
-        }
+        if (window['chartjs-plugin-zoom']) { window.ChartZoom = window['chartjs-plugin-zoom']; window.Chart.register(window.ChartZoom) }
       }
       setChartjsLoaded(true)
     }
@@ -391,11 +345,11 @@ export default function Dashboard() {
   const params = {
     dataset,
     min_score: minScore,
-      since_hours: (dateRangeHours && dateRangeHours !== 'custom') ? dateRangeHours : undefined,
-      date_from: dateRangeHours === 'custom' ? customDateFrom || undefined : undefined,
-      date_to: dateRangeHours === 'custom' ? customDateTo || undefined : undefined,
+    since_hours: (dateRangeHours && dateRangeHours !== 'custom') ? dateRangeHours : undefined,
+    date_from: dateRangeHours === 'custom' ? customDateFrom || undefined : undefined,
+    date_to: dateRangeHours === 'custom' ? customDateTo || undefined : undefined,
     beacon_type: beaconType || undefined,
-    threat_intel_only: threatIntelOnly || undefined,
+    threat_intel_only: threatIntelOnly === true ? true : undefined,
     protocol: protocol || undefined,
     show_suppressed: showSuppressed === true ? true : undefined,
   }
@@ -410,16 +364,28 @@ export default function Dashboard() {
       .then(([dash, charts]) => { setData(dash.data); setChartData(charts.data) })
       .catch(() => setError('Failed to load dashboard'))
       .finally(() => setLoading(false))
-  }, [dataset, minScore, dateRangeHours, customDateFrom, customDateTo, beaconType, threatIntelOnly, protocol, showSuppressed])
+  }, [dataset, minScore, dateRangeHours, customDateFrom, customDateTo, beaconType, threatIntelOnly, protocol, showSuppressed, refreshKey])
 
-  const handleIPClick = (ip) => {
-    setGlobalFilter(ip)
-  }
+  const handleIPClick = (ip) => setGlobalFilter(ip)
 
   const handleApplyRange = (minDay, maxDay) => {
     setDateRangeHours('custom')
     setCustomDateFrom(minDay)
     setCustomDateTo(maxDay)
+  }
+
+  const handleRowContextMenu = (e, row) => {
+    e.preventDefault()
+    const srcIP = formatIP(row.src)
+    const dstIP = formatIP(row.dst)
+    const fqdn  = row.fqdn
+    const items = []
+    if (srcIP) items.push({ icon: 'X', label: `Suppress src: ${srcIP}`, onClick: () => setSuppressDialog({ row, valueType: 'src' }) })
+    if (dstIP) items.push({ icon: 'X', label: `Suppress dst: ${dstIP}`, onClick: () => setSuppressDialog({ row, valueType: 'dst' }) })
+    if (fqdn)  items.push({ icon: 'X', label: `Suppress FQDN: ${fqdn}`, onClick: () => setSuppressDialog({ row, valueType: 'fqdn' }) })
+    items.push('divider')
+    items.push({ icon: 'F', label: `Filter by ${srcIP}`, onClick: () => setGlobalFilter(srcIP) })
+    setContextMenu({ x: e.clientX, y: e.clientY, items })
   }
 
   const filterRows = (rows) => {
@@ -447,7 +413,6 @@ export default function Dashboard() {
 
       <FilterBar />
 
-      {/* IP Search */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
         <input
           placeholder="Search IP or FQDN..."
@@ -467,8 +432,6 @@ export default function Dashboard() {
 
       {!loading && data && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-
-          {/* Stat cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem' }}>
             <StatCard label="Beaconing"        value={counts.beaconing}    color="#7c85f5" onClick={() => navigate('/beaconing')} />
             <StatCard label="Long Connections" value={counts.long_conns}   color="#38bdf8" onClick={() => navigate('/longconns')} />
@@ -478,10 +441,7 @@ export default function Dashboard() {
             <StatCard label="TI + Beacon"      value={counts.ti_beaconing} color="#ec4899" onClick={() => { setThreatIntelOnly(true); navigate('/beaconing') }} />
           </div>
 
-          {/* Main content — left: top tables, right: charts */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1rem', alignItems: 'start' }}>
-
-            {/* Left — stacked top tables */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <TopTable
                 title="Top Beaconing Threats"
@@ -489,6 +449,7 @@ export default function Dashboard() {
                 scoreKey="beacon_threat_score"
                 color="#7c85f5"
                 onIPClick={ip => handleIPClick(ip)}
+                onRowContextMenu={handleRowContextMenu}
                 extraCols={[{ label: 'Duration', render: row => formatDur(row.total_duration) }]}
               />
               <TopTable
@@ -497,9 +458,8 @@ export default function Dashboard() {
                 scoreKey="threat_intel_score"
                 color="#ef4444"
                 onIPClick={ip => handleIPClick(ip)}
-                extraCols={[
-                  { label: 'Feed', render: row => row.modifier_name || '—' },
-                ]}
+                onRowContextMenu={handleRowContextMenu}
+                extraCols={[{ label: 'Feed', render: row => row.modifier_name || '—' }]}
               />
               <TopTable
                 title="Top Long Connections"
@@ -507,6 +467,7 @@ export default function Dashboard() {
                 scoreKey="long_conn_score"
                 color="#38bdf8"
                 onIPClick={ip => handleIPClick(ip)}
+                onRowContextMenu={handleRowContextMenu}
                 extraCols={[
                   { label: 'Duration',    render: row => formatDur(row.total_duration) },
                   { label: 'Total Bytes', render: row => formatByt(row.total_bytes) },
@@ -515,11 +476,10 @@ export default function Dashboard() {
               />
             </div>
 
-            {/* Right — charts */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {globalFilter && (
                 <div style={{ background: '#1e2235', border: '1px solid #2d3148', borderRadius: 6, padding: '0.5rem 0.75rem', fontSize: 12, color: '#64748b' }}>
-                  ℹ Charts show dataset totals — IP filter applies to tables only
+                  Charts show dataset totals — IP filter applies to tables only
                 </div>
               )}
               {chartjsLoaded && chartData && <TrendChart data={chartData.trend} onApplyRange={handleApplyRange} />}
@@ -527,8 +487,24 @@ export default function Dashboard() {
               {!chartjsLoaded && <div style={{ color: '#475569', fontSize: 13 }}>Loading charts...</div>}
             </div>
           </div>
-
         </div>
+      )}
+
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenu.items}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
+      {suppressDialog && (
+        <SuppressDialog
+          row={suppressDialog.row}
+          valueType={suppressDialog.valueType}
+          onClose={() => setSuppressDialog(null)}
+          onSuccess={() => { setSuppressDialog(null); setRefreshKey(k => k + 1) }}
+        />
       )}
     </div>
   )

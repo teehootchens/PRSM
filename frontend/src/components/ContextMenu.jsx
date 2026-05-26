@@ -8,10 +8,8 @@ export default function ContextMenu({ x, y, items, onClose }) {
       if (ref.current && !ref.current.contains(e.target)) onClose()
     }
     document.addEventListener('mousedown', handle)
-    document.addEventListener('contextmenu', handle)
     return () => {
       document.removeEventListener('mousedown', handle)
-      document.removeEventListener('contextmenu', handle)
     }
   }, [onClose])
 
