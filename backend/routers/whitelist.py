@@ -131,11 +131,16 @@ async def import_excel(file: UploadFile = File(...), scope: str = "global", expi
         if not value:
             continue
 
-        # Determine if IP or FQDN
+        # Determine if IP, CIDR, or FQDN
         try:
-            ipaddress.ip_address(value)
-            # It's an IP — add as both src and dst
-            types = ['src', 'dst']
+            ipaddress.ip_network(value, strict=False)
+            if '/' in value:
+                # CIDR — add as both src and dst
+                types = ['src', 'dst']
+            else:
+                # Plain IP — add as both src and dst
+                ipaddress.ip_address(value)
+                types = ['src', 'dst']
         except ValueError:
             # Treat as FQDN
             types = ['fqdn']

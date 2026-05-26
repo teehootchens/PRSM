@@ -86,7 +86,9 @@ function TopTable({ title, rows, scoreKey, color, onIPClick, extraCols = [], onR
                   onClick={() => onIPClick(formatIP(row.src))} title={`Filter by ${formatIP(row.src)}`}>
                   {formatIP(row.src)}
                 </td>
-                <td style={{ padding: '0.4rem 0.75rem', color: '#e2e8f0', fontSize: 12, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <td style={{ padding: '0.4rem 0.75rem', color: '#93c5fd', cursor: 'pointer', fontSize: 12, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  onClick={() => onIPClick(row.fqdn || formatIP(row.dst))}
+                  title={`Filter by ${row.fqdn || formatIP(row.dst)}`}>
                   {row.fqdn || formatIP(row.dst)}
                 </td>
                 {extraCols.map(c => (
@@ -366,7 +368,11 @@ export default function Dashboard() {
       .finally(() => setLoading(false))
   }, [dataset, minScore, dateRangeHours, customDateFrom, customDateTo, beaconType, threatIntelOnly, protocol, showSuppressed, refreshKey])
 
-  const handleIPClick = (ip) => setGlobalFilter(ip)
+  const handleIPClick = (ip) => {
+    const selection = window.getSelection()
+    if (selection && selection.toString().length > 0) return
+    setGlobalFilter(ip)
+  }
 
   const handleApplyRange = (minDay, maxDay) => {
     setDateRangeHours('custom')

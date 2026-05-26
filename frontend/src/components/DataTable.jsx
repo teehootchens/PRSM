@@ -3,7 +3,7 @@ import {
   useReactTable, getCoreRowModel, getSortedRowModel,
   getFilteredRowModel, flexRender,
 } from '@tanstack/react-table'
-import { formatIP } from '../utils'
+import { formatIP, matchesFilter } from '../utils'
 import { useFilters } from '../FiltersContext'
 import DetailPanel from './DetailPanel'
 import ContextMenu from './ContextMenu'
@@ -73,10 +73,13 @@ export default function DataTable({ data, columns, defaultSort, onRefresh }) {
     return { grouped, flatPrimary }
   }, [data])
 
+  // CIDR-aware filter — applied after TanStack's own filter
+  const cidrFilter = globalFilter && (globalFilter.includes('/') || globalFilter.includes('*'))
+
   const table = useReactTable({
     data: flatPrimary,
     columns,
-    state: { sorting, globalFilter },
+    state: { sorting, globalFilter: cidrFilter ? '' : globalFilter },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
@@ -84,14 +87,31 @@ export default function DataTable({ data, columns, defaultSort, onRefresh }) {
     getFilteredRowModel: getFilteredRowModel(),
   })
 
+  // Apply CIDR filter on top of TanStack rows
+  const visibleRows = cidrFilter
+    ? table.getRowModel().rows.filter(row => {
+        const src = formatIP(row.original.src || '')
+        const dst = formatIP(row.original.dst || '')
+        const fqdn = row.original.fqdn || ''
+        return matchesFilter(src, globalFilter) || matchesFilter(dst, globalFilter) || matchesFilter(fqdn, globalFilter)
+      })
+    : table.getRowModel().rows
+
   const handleCellClick = (e, colId, value) => {
     if (CLICKABLE.includes(colId) && value) {
+      // Only filter if no text was selected (not a drag-to-copy action)
+      const selection = window.getSelection()
+      if (selection && selection.toString().length > 0) return
       e.stopPropagation()
       setGlobalFilter(formatIP(value))
     }
   }
 
-  const handleRowClick = (rowData) => setSelectedRow(rowData)
+  const handleRowClick = (rowData) => {
+    const selection = window.getSelection()
+    if (selection && selection.toString().length > 0) return
+    setSelectedRow(rowData)
+  }
 
   const handleContextMenu = useCallback((e, rowData) => {
     e.preventDefault()
@@ -166,7 +186,7 @@ export default function DataTable({ data, columns, defaultSort, onRefresh }) {
           </button>
         )}
         <span style={{ color: '#475569', marginLeft: 'auto', fontSize: 13 }}>
-          {table.getRowModel().rows.length} rows
+          {visibleRows.length} rows
           {data.length !== flatPrimary.length && ` (${data.length} total with history)`}
         </span>
       </div>
@@ -187,7 +207,7 @@ export default function DataTable({ data, columns, defaultSort, onRefresh }) {
             ))}
           </thead>
           <tbody>
-            {table.getRowModel().rows.map((row, i) => {
+            {visibleRows.map((row, i) => {
               const key = `${row.original.src}||${row.original.dst}||${row.original.fqdn}`
               const group = grouped[key]
               const hasChildren = group?.children?.length > 0
