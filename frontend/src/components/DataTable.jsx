@@ -45,7 +45,7 @@ const TH_STYLE = {
 
 const CLICKABLE = ['src', 'dst', 'fqdn']
 
-export default function DataTable({ data, columns, defaultSort, onRefresh }) {
+export default function DataTable({ data, columns, defaultSort, onRefresh, onCellClick }) {
   const [sorting, setSorting] = useState(defaultSort || [])
   const { globalFilter, setGlobalFilter } = useFilters()
   const [expanded, setExpanded] = useState({})
@@ -99,11 +99,14 @@ export default function DataTable({ data, columns, defaultSort, onRefresh }) {
 
   const handleCellClick = (e, colId, value) => {
     if (CLICKABLE.includes(colId) && value) {
-      // Only filter if no text was selected (not a drag-to-copy action)
       const selection = window.getSelection()
       if (selection && selection.toString().length > 0) return
       e.stopPropagation()
-      setGlobalFilter(formatIP(value))
+      if (onCellClick) {
+        onCellClick(formatIP(value), colId)
+      } else {
+        setGlobalFilter(formatIP(value))
+      }
     }
   }
 
@@ -146,11 +149,20 @@ export default function DataTable({ data, columns, defaultSort, onRefresh }) {
     }
 
     items.push('divider')
-    items.push({
-      icon: '🔍',
-      label: srcIP ? `Filter by ${srcIP}` : 'Filter',
-      onClick: () => setGlobalFilter(srcIP),
-    })
+    if (onCellClick) {
+      // On Investigate page — left-click adds to targets, right-click offers global filter
+      items.push({
+        icon: '🔍',
+        label: srcIP ? `Add to global filter: ${srcIP}` : 'Add to global filter',
+        onClick: () => setGlobalFilter(srcIP),
+      })
+    } else {
+      items.push({
+        icon: '🔍',
+        label: srcIP ? `Filter by ${srcIP}` : 'Filter',
+        onClick: () => setGlobalFilter(srcIP),
+      })
+    }
     items.push({
       icon: '📋',
       label: 'View details',

@@ -9,6 +9,7 @@ import DNS from './pages/DNS.jsx'
 import ThreatIntel from './pages/ThreatIntel.jsx'
 import Strobe from './pages/Strobe.jsx'
 import Whitelist from './pages/Whitelist.jsx'
+import Investigate from './pages/Investigate.jsx'
 import Login from './pages/Login.jsx'
 import './App.css'
 
@@ -108,11 +109,12 @@ function Shell() {
         <DatasetPicker />
         <ActiveFiltersBadge />
         <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Dashboard</NavLink>
+        <NavLink to="/investigate" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Investigate</NavLink>
         <NavLink to="/beaconing" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Beaconing</NavLink>
         <NavLink to="/longconns" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Long Connections</NavLink>
         <NavLink to="/dns" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>DNS Analysis</NavLink>
-        <NavLink to="/threatintel" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Threat Intel</NavLink>
         <NavLink to="/strobe" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Strobe Detection</NavLink>
+        <NavLink to="/threatintel" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Threat Intel</NavLink>
         <NavLink to="/whitelist" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Suppression List</NavLink>
         <div style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid #2d3148' }}>
           <button onClick={logout} style={{
@@ -129,6 +131,7 @@ function Shell() {
           <Route path="/dns" element={<DNS />} />
           <Route path="/threatintel" element={<ThreatIntel />} />
           <Route path="/strobe" element={<Strobe />} />
+          <Route path="/investigate" element={<Investigate />} />
           <Route path="/whitelist" element={<Whitelist />} />
         </Routes>
       </main>

@@ -9,7 +9,7 @@ from passlib.hash import bcrypt
 
 load_dotenv("/opt/rita-gui/.env")
 
-from backend.routers import beaconing, datasets, longconns, dns, threatintel, strobe, dashboard, protocols, charts, whitelist
+from backend.routers import beaconing, datasets, longconns, dns, threatintel, strobe, dashboard, protocols, charts, whitelist, investigate, investigate
 
 app = FastAPI(title="RITA GUI", version="0.1.0")
 security = HTTPBasic(auto_error=False)
@@ -40,7 +40,11 @@ app.include_router(dashboard.router,   dependencies=[Depends(require_auth)])
 app.include_router(protocols.router,   dependencies=[Depends(require_auth)])
 app.include_router(charts.router,     dependencies=[Depends(require_auth)])
 app.include_router(whitelist.router,   dependencies=[Depends(require_auth)])
+app.include_router(investigate.router,  dependencies=[Depends(require_auth)])
+app.include_router(investigate.router,  dependencies=[Depends(require_auth)])
 app.include_router(whitelist.router,   dependencies=[Depends(require_auth)])
+app.include_router(investigate.router,  dependencies=[Depends(require_auth)])
+app.include_router(investigate.router,  dependencies=[Depends(require_auth)])
 
 @app.get("/health")
 def health():
