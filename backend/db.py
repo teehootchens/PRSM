@@ -2,7 +2,7 @@ import clickhouse_connect
 from dotenv import load_dotenv
 import os
 
-load_dotenv("/opt/rita-gui/.env")
+load_dotenv("/opt/PRSM/.env")
 
 def get_client():
     return clickhouse_connect.get_client(

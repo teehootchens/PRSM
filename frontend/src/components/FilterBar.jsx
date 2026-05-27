@@ -102,14 +102,29 @@ export default function FilterBar() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
         <span style={labelStyle}>Min Score</span>
         <input
-          type="range" min="0" max="100" step="5"
+          type="range" min="0" max="100" step="1"
           value={Math.round(minScore * 100)}
           onChange={e => setMinScore(Number(e.target.value) / 100)}
           style={{ width: 80, accentColor: '#7c85f5' }}
         />
-        <span style={{ color: '#7c85f5', fontWeight: 700, fontSize: 12, minWidth: 32, fontVariantNumeric: 'tabular-nums' }}>
-          {Math.round(minScore * 100)}%
-        </span>
+        <input
+          type="number" min="0" max="100" step="1"
+          value={Math.round(minScore * 100)}
+          onChange={e => {
+            const v = Math.min(100, Math.max(0, Number(e.target.value)))
+            if (!isNaN(v)) setMinScore(v / 100)
+          }}
+          onBlur={e => {
+            const v = Math.min(100, Math.max(0, Number(e.target.value)))
+            setMinScore((isNaN(v) ? 0 : v) / 100)
+          }}
+          style={{
+            width: 48, background: '#0f1117', border: '1px solid #2d3148',
+            color: '#7c85f5', fontWeight: 700, fontSize: 12, padding: '0.2rem 0.35rem',
+            borderRadius: 4, textAlign: 'center', fontVariantNumeric: 'tabular-nums',
+          }}
+        />
+        <span style={{ color: '#475569', fontSize: 12 }}>%</span>
       </div>
 
       {/* Beacon Type */}

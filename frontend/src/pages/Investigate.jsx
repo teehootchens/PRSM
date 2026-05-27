@@ -12,21 +12,32 @@ function ChipInput({ chips, onChange }) {
   const [input, setInput] = useState('')
   const inputRef = useRef(null)
 
-  const add = (raw) => {
+  const parseRaw = (raw) => {
     const val = raw.trim()
-    if (!val || chips.includes(val)) return
-    onChange([...chips, val])
+    if (!val) return null
+    // Detect NOT prefix: "!8.8.8.8" or "NOT 8.8.8.8" (case-insensitive)
+    const notMatch = val.match(/^(!|NOT\s+)(.+)$/i)
+    if (notMatch) return { value: notMatch[2].trim(), negate: true }
+    return { value: val, negate: false }
+  }
+
+  const add = (raw) => {
+    const chip = parseRaw(raw)
+    if (!chip) return
+    // Deduplicate by value
+    if (chips.some(c => c.value === chip.value)) return
+    onChange([...chips, chip])
     setInput('')
   }
 
-  const remove = (chip) => onChange(chips.filter(c => c !== chip))
+  const remove = (val) => onChange(chips.filter(c => c.value !== val))
 
   const handleKey = (e) => {
     if (['Enter', ',', ' '].includes(e.key)) {
       e.preventDefault()
       add(input)
     } else if (e.key === 'Backspace' && !input && chips.length) {
-      remove(chips[chips.length - 1])
+      remove(chips[chips.length - 1].value)
     }
   }
 
@@ -40,26 +51,33 @@ function ChipInput({ chips, onChange }) {
         borderRadius: 8, padding: '0.4rem 0.75rem', cursor: 'text',
       }}
     >
-      {chips.map(chip => (
-        <span key={chip} style={{
-          display: 'inline-flex', alignItems: 'center', gap: 4,
-          background: '#7c85f522', border: '1px solid #7c85f555',
-          color: '#7c85f5', borderRadius: 4, padding: '2px 8px', fontSize: 13, fontWeight: 600,
-        }}>
-          {chip}
-          <button onClick={() => remove(chip)} style={{
-            background: 'none', border: 'none', color: '#7c85f5',
-            cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0, opacity: 0.7,
-          }}>✕</button>
-        </span>
-      ))}
+      {chips.map(chip => {
+        const isNeg = chip.negate
+        const chipColor = isNeg ? '#ef4444' : '#7c85f5'
+        const chipBg   = isNeg ? '#ef444422' : '#7c85f522'
+        const chipBdr  = isNeg ? '#ef444455' : '#7c85f555'
+        return (
+          <span key={chip.value} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            background: chipBg, border: `1px solid ${chipBdr}`,
+            color: chipColor, borderRadius: 4, padding: '2px 8px', fontSize: 13, fontWeight: 600,
+          }}>
+            {isNeg && <span style={{ fontSize: 11, opacity: 0.85, marginRight: 2 }}>NOT</span>}
+            {chip.value}
+            <button onClick={() => remove(chip.value)} style={{
+              background: 'none', border: 'none', color: chipColor,
+              cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0, opacity: 0.7,
+            }}>✕</button>
+          </span>
+        )
+      })}
       <input
         ref={inputRef}
         value={input}
         onChange={e => setInput(e.target.value)}
         onKeyDown={handleKey}
         onBlur={() => input && add(input)}
-        placeholder={chips.length ? '' : 'Filter by IP, CIDR, or FQDN (optional — leave empty for all data)...'}
+        placeholder={chips.length ? '' : 'IP, CIDR, or FQDN — prefix with ! or NOT to exclude...'}
         style={{
           flex: 1, minWidth: 200, background: 'none', border: 'none',
           color: '#e2e8f0', fontSize: 13, outline: 'none',
@@ -294,7 +312,10 @@ export default function Investigate() {
   const [andMode, setAndMode] = useState(() => { try { return JSON.parse(localStorage.getItem('rita_investigate_and') || 'false') } catch { return false } })
   const setAndModeP = (v) => { try { localStorage.setItem('rita_investigate_and', JSON.stringify(v)) } catch {}; setAndMode(v) }
   const [chips, setChipsState] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('rita_investigate_chips') || '[]') } catch { return [] }
+    try {
+      const stored = JSON.parse(localStorage.getItem('rita_investigate_chips') || '[]')
+      return stored.map(c => typeof c === 'string' ? { value: c, negate: false } : c)
+    } catch { return [] }
   })
   const setChips = (val) => {
     try { localStorage.setItem('rita_investigate_chips', JSON.stringify(val)) } catch {}
@@ -323,7 +344,8 @@ export default function Investigate() {
     setLoading(true); setError(null)
     axios.get('/api/investigate', { ...auth, params: {
       dataset,
-      targets: chips.join(','),
+      targets: chips.filter(c => !c.negate).map(c => c.value).join(','),
+      not_targets: chips.filter(c => c.negate).map(c => c.value).join(',') || undefined,
       and_mode: andMode === true ? true : undefined,
       since_hours: (dateRangeHours && dateRangeHours !== 'custom') ? dateRangeHours : undefined,
       date_from: dateRangeHours === 'custom' ? customDateFrom || undefined : undefined,
@@ -344,7 +366,7 @@ export default function Investigate() {
     if (data !== null) {
       run()
     }
-  }, [dateRangeHours, customDateFrom, customDateTo, minScore, beaconType, threatIntelOnly, protocol, showSuppressed, dataset])
+  }, [chips, andMode, dateRangeHours, customDateFrom, customDateTo, minScore, beaconType, threatIntelOnly, protocol, showSuppressed, dataset])
 
   const handleApplyRange = (minDay, maxDay) => {
     setDateRangeHours('custom')
@@ -354,8 +376,8 @@ export default function Investigate() {
 
     const handleCellClick = (value) => {
     if (!value || value === '—') return
-    if (!chips.includes(value)) {
-      setChips([...chips, value])
+    if (!chips.some(c => c.value === value)) {
+      setChips([...chips, { value, negate: false }])
     }
   }
 
@@ -384,7 +406,7 @@ export default function Investigate() {
         <div style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
           Targets — IPs, CIDRs, or FQDNs
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
               <span style={{ fontSize: 11, color: '#475569' }}>Match mode:</span>
@@ -431,7 +453,7 @@ export default function Investigate() {
           </button>
           {chips.length > 0 && (
             <button
-              onClick={() => { setChips([]); setData(null) }}
+              onClick={() => { setChips([]) }}
               style={{ background: 'none', border: '1px solid #2d3148', color: '#475569', borderRadius: 8, padding: '0.6rem 1rem', cursor: 'pointer', fontSize: 13 }}
             >
               Clear

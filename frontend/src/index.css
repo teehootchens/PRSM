@@ -25,10 +25,7 @@ body {
 }
 
 .logo {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: #7c85f5;
-  padding: 0.5rem 0;
+  padding: 0.25rem 0;
   margin-bottom: 1rem;
   border-bottom: 1px solid #2d3148;
 }

@@ -61,6 +61,7 @@ def investigate(
     threat_intel_only: bool = Query(False),
     protocol: Optional[str] = Query(None),
     and_mode: bool = Query(False),
+    not_targets: Optional[str] = Query(None),
 ):
     client = get_client()
     target_list = [t.strip() for t in targets.split(',') if t.strip()]
@@ -77,6 +78,13 @@ def investigate(
 
     time_cond = time_condition(since_hours, date_from, date_to)
     supp_cond = get_suppression_conditions(dataset, show_suppressed)
+    not_list = [t.strip() for t in not_targets.split(',') if t.strip()] if not_targets else []
+    if not_list:
+        not_parts = [f"NOT ({build_target_conditions([t])})" for t in not_list]
+        not_cond = "AND " + " AND ".join(not_parts)
+    else:
+        not_cond = ""
+
     extra = []
     if min_score > 0:
         extra.append(f"beacon_threat_score >= {min_score}")
@@ -88,7 +96,7 @@ def investigate(
         extra.append(f"has(port_proto_service, '{protocol}')")
     extra_cond = ("AND " + " AND ".join(extra)) if extra else ""
 
-    base_where = f"WHERE {target_cond} {time_cond} {supp_cond} {extra_cond}"
+    base_where = f"WHERE {target_cond} {time_cond} {supp_cond} {extra_cond} {not_cond}"
 
     # Summary stats
     summary_q = client.query(f"""

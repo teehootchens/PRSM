@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from passlib.hash import bcrypt
 
-load_dotenv("/opt/rita-gui/.env")
+load_dotenv("/opt/PRSM/.env")
 
 from backend.routers import beaconing, datasets, longconns, dns, threatintel, strobe, dashboard, protocols, charts, whitelist, investigate, investigate
 

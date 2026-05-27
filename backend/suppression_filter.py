@@ -1,7 +1,7 @@
 import sqlite3
 from datetime import datetime
 
-DB_PATH = "/opt/rita-gui/whitelist.db"
+DB_PATH = "/opt/PRSM/whitelist.db"
 
 def is_cidr(value: str) -> bool:
     return '/' in value

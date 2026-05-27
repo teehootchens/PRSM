@@ -12,6 +12,7 @@ import Whitelist from './pages/Whitelist.jsx'
 import Investigate from './pages/Investigate.jsx'
 import Login from './pages/Login.jsx'
 import './App.css'
+import prsmLogo from './assets/prsm-logo.svg'
 
 function DatasetPicker() {
   const { datasets, dataset, setDataset } = useDataset()
@@ -105,7 +106,7 @@ function Shell() {
   return (
     <div className="app">
       <nav className="sidebar">
-        <div className="logo">RITA GUI</div>
+        <div className="logo"><img src={prsmLogo} alt="PRSM" style={{ width: '100%', display: 'block' }} /></div>
         <DatasetPicker />
         <ActiveFiltersBadge />
         <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Dashboard</NavLink>
