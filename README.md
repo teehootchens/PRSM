@@ -1,84 +1,107 @@
-# RITA GUI
+# PRSM — Pattern Recognition and Scoring Matrix
 
-A web-based GUI for [RITA v5](https://github.com/activecm/rita) (Real Intelligence Threat Analytics) built as a self-hosted alternative to AC-Hunter.
+A web-based threat analysis GUI for [RITA v5](https://github.com/activecm/rita) (Real Intelligence Threat Analytics) built as a self-hosted alternative to AC-Hunter.
+
+**PRSM** surfaces beaconing, long connections, DNS tunneling, strobe detection, and threat intel hits from RITA's ClickHouse dataset — giving analysts a fast, filterable, investigative interface over their network telemetry.
+
+---
 
 ## Features
 
 ### Analysis Pages
-- **Dashboard** — summary counts, top threats, detection trend chart, score distribution chart
+- **Dashboard** — summary counts, top threats, detection trend chart, score distribution
+- **Investigate** — multi-target IP/CIDR/FQDN investigation with trend chart and unified results
 - **Beaconing** — scored connections sorted by threat score with expandable history
 - **Long Connections** — persistent outbound sessions by duration
 - **DNS Analysis** — C2-over-DNS and DNS tunneling detection
-- **Threat Intel** — connections matching known bad IPs/domains from threat feeds
 - **Strobe Detection** — high connection count hosts
+- **Threat Intel** — connections matching known bad IPs/domains
 
-### Filtering & Investigation
-- Global IP/FQDN/CIDR filter that persists across all pages and browser refreshes
-- CIDR notation support (10.0.0.0/24) and wildcard (10.0.0.*) in filter box
-- Click any src/dst/FQDN to instantly filter — text selection safe
-- Time range filter: Last 24h, 7d, 30d, 90d, 1yr, All Time, or custom date range
+### Investigate Page
+- Chip-style input — type an IP, CIDR, or FQDN and press Enter to add as a target
+- OR / AND mode toggle — OR shows rows matching any target, AND shows rows where all targets appear
+- Auto-runs on page load with persisted chips
+- Trend chart showing Connections, Max Score, and Bytes over time — all toggleable
 - Drag-to-zoom on trend chart with Apply as filter button
-- Minimum score threshold slider
-- Beacon type filter (IP / DNS)
-- Protocol/port filter (populated from actual dataset values)
-- TI Only toggle — show only threat intel hits across all pages
-- Active filters badge in sidebar — always visible, clear individually or all at once
+- Summary cards — max threat score, total connections, bytes, first/last seen, TI hits
+- Unified results table across all threat categories with category badges
+- Left-click src/dst/fqdn adds to investigation targets
+- Right-click offers suppress and Add to global filter options
+- All FilterBar filters apply (time range, min score, type, protocol, TI Only, suppressed)
 
-### Suppression List
+### Filtering
+- Global IP/FQDN/CIDR filter persists across all pages
+- CIDR notation (10.0.0.0/24) and wildcard (10.0.0.*) support in filter box
+- Click any src/dst/fqdn to filter — text selection safe
+- Time range: Last 24h, 7d, 30d, 90d, 1yr, All Time, or custom date range
+- Drag-to-zoom on trend charts with Apply as filter
+- Min score threshold slider
+- Beacon type filter (IP / DNS)
+- Protocol/port filter (populated from dataset)
+- TI Only toggle
+- Show/Hide suppressed toggle
+- Active filters badge in sidebar — clear individually or all at once
+
+### Suppression
 - Right-click any row on any page to suppress src IP, dst IP, or FQDN
-- Suppression scopes: Global (all datasets) or per-dataset
-- Expiry options: 30, 60, 90, 180 days, 1 year, or Permanent
-- Optional reason/note per suppression
-- CIDR suppression (8.8.8.0/24 suppresses entire range)
-- Show/hide suppressed entries toggle with visual red highlight
-- Suppression List management page with:
-  - Manual add with type, scope, expiry, and reason
-  - Excel import (single column, no header — IPs, CIDRs, or FQDNs)
-  - Multi-select bulk delete with typed confirmation (type delete)
+- CIDR suppression (8.8.8.0/24 suppresses entire range at ClickHouse level)
+- Scopes: Global (all datasets) or per-dataset
+- Expiry: 30, 60, 90, 180 days, 1 year, or Permanent
+- Optional reason/note
+- Suppressed rows highlighted red when visible
+- Suppression List page:
+  - Manual add with type, scope, expiry, reason
+  - Excel import (single column, no header — IPs, CIDRs, FQDNs)
+  - Multi-select bulk delete with typed confirmation
   - Grouped display — same IP shown as one row with multiple type badges
-  - Individual type removal via badge X button
+  - Individual type removal via badge x
 
 ### Dashboard
-- Clickable stat cards navigate to respective analysis pages
-- TI + Beacon card activates TI Only filter and navigates to Beaconing
-- Top tables support right-click suppress and click-to-filter
-- Detection trend chart with toggleable series (Beaconing, Threat Intel, Long Conns, C2/DNS, Strobe)
-- Score distribution horizontal bar chart
-- Dataset coverage date range display
+- Clickable stat cards navigate to analysis pages
+- Right-click suppress on top tables
+- Detection trend chart with 5 toggleable series
+- Score distribution chart
+- Dataset coverage date range
 
 ### Detail Panel
-- Click any row to open a slide-out detail panel
-- Shows all scores with visual progress bars
+- Click any row to open slide-out detail panel
+- All scores with progress bars
 - Beacon interval histogram
-- Data size distribution chart
+- Data size distribution
 - Full connection metadata
 
-### Auth & Security
+### Auth
 - Login page with bcrypt hashed password
-- Session persists across page refreshes (sessionStorage)
-- HTTP Basic auth — no browser popup on failed login
-- Single username/password configured via .env
+- Session persists across refreshes (sessionStorage)
+- No browser popup on failed login
+
+---
 
 ## Stack
 
-- **Backend** — Python 3, FastAPI, clickhouse-connect
+- **Backend** — Python 3, FastAPI, uvicorn, clickhouse-connect
 - **Frontend** — React 18, Vite, TanStack Table, Chart.js
-- **Database** — ClickHouse (via RITA v5 Docker deployment)
+- **Database** — ClickHouse (via RITA v5 Docker)
 - **Suppression store** — SQLite (/opt/rita-gui/whitelist.db)
-- **Deployment** — systemd service on port 8080
+- **Service** — systemd on port 8080
+
+---
 
 ## Requirements
 
-- RITA v5.1+ running via Docker Compose
+- RITA v5.1+ via Docker Compose
 - Python 3.10+
 - Node.js 22+
 - ClickHouse HTTP port 8123 exposed to localhost
+- Docker running (service dependency)
 
-## Setup
+---
 
-### 1. Expose ClickHouse HTTP port to localhost
+## Deployment
 
-Edit /opt/rita/docker-compose.yml and uncomment:
+### 1. Expose ClickHouse to localhost
+
+Edit /opt/rita/docker-compose.yml and add/uncomment under the clickhouse service:
 
     ports:
       - 127.0.0.1:8123:8123
@@ -88,19 +111,34 @@ Restart ClickHouse:
     cd /opt/rita && docker compose up -d clickhouse
     curl http://localhost:8123/ping  # should return Ok.
 
-### 2. Clone and configure
+### 2. Clone the repo
 
     git clone https://github.com/teehootchens/rita-gui.git /opt/rita-gui
     cd /opt/rita-gui
-    cp .env.example .env
-    nano .env  # set credentials
 
 ### 3. Install backend dependencies
 
-    pip3 install -r backend/requirements.txt
-    pip3 install python-multipart openpyxl --break-system-packages
+    pip3 install fastapi uvicorn clickhouse-connect python-multipart openpyxl passlib[bcrypt] python-dotenv --break-system-packages
 
-### 4. Initialize suppression database
+### 4. Configure environment
+
+    cp .env.example .env
+    nano .env
+
+Generate a bcrypt password hash:
+
+    python3 -c "from passlib.hash import bcrypt; print(bcrypt.hash('yourpassword'))"
+
+Your .env should look like:
+
+    CLICKHOUSE_HOST=127.0.0.1
+    CLICKHOUSE_PORT=8123
+    CLICKHOUSE_USER=default
+    CLICKHOUSE_PASSWORD=
+    GUI_USERNAME=admin
+    GUI_PASSWORD_HASH=$2b$12$...your hash here...
+
+### 5. Initialize suppression database
 
     python3 << PYEOF
     import sqlite3
@@ -120,64 +158,103 @@ Restart ClickHouse:
     """)
     conn.commit()
     conn.close()
+    print("Done")
     PYEOF
 
-### 5. Generate bcrypt password hash
-
-    python3 -c "from passlib.hash import bcrypt; print(bcrypt.hash('yourpassword'))"
-
-Add to .env:
-
-    GUI_USERNAME=admin
-    GUI_PASSWORD_HASH=$2b$12$...your hash...
-
-### 6. Build frontend
+### 6. Build the frontend
 
     cd /opt/rita-gui/frontend
     npm install
     npm run build
+    cd /opt/rita-gui
 
-### 7. Install systemd service
+### 7. Install and start the systemd service
+
+Create the service file:
+
+    sudo tee /etc/systemd/system/rita-gui.service << SVCEOF
+    [Unit]
+    Description=RITA GUI
+    After=network.target docker.service
+    Requires=docker.service
+
+    [Service]
+    Type=simple
+    User=root
+    WorkingDirectory=/opt/rita-gui
+    ExecStart=/usr/bin/python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 8080
+    Restart=on-failure
+    RestartSec=5
+    Environment=PYTHONPATH=/opt/rita-gui
+
+    [Install]
+    WantedBy=multi-user.target
+    SVCEOF
+
+Enable and start:
 
     sudo systemctl daemon-reload
     sudo systemctl enable --now rita-gui
+    sudo systemctl status rita-gui
 
 Access the GUI at http://<server-ip>:8080
 
-## Environment Variables
+### 8. Updating after code changes
 
-    CLICKHOUSE_HOST=127.0.0.1
-    CLICKHOUSE_PORT=8123
-    CLICKHOUSE_USER=default
-    CLICKHOUSE_PASSWORD=
-    GUI_USERNAME=admin
-    GUI_PASSWORD_HASH=$2b$12$...bcrypt hash of your password...
+After pulling new code or editing backend files:
+
+    sudo systemctl restart rita-gui
+
+After pulling new code that includes frontend changes:
+
+    cd /opt/rita-gui/frontend
+    npm run build
+    cd /opt/rita-gui
+    sudo systemctl restart rita-gui
+
+---
 
 ## Test Data
 
-    # Inject realistic test data (1 year, with incident weeks)
+    # Inject ~1 year of realistic test data with incident weeks
     python3 inject_test_data.py
 
     # Remove test data
     python3 inject_test_data.py --delete
 
+---
+
 ## Architecture
 
-    [Security Onion]
-        |  zeek_log_transport.sh
+    [Security Onion / Log Source]
+        |  Zeek logs
         v
     [RITA Server]
-        +-- ClickHouse (localhost:8123)
-        +-- RITA v5 (imports Zeek logs, populates ClickHouse)
-        +-- SQLite (suppression list at /opt/rita-gui/whitelist.db)
-        +-- RITA GUI (port 8080, LAN accessible)
+        +-- RITA v5        (parses Zeek logs -> ClickHouse)
+        +-- ClickHouse     (localhost:8123, never exposed to LAN)
+        +-- SQLite         (/opt/rita-gui/whitelist.db, suppression list)
+        +-- PRSM GUI       (port 8080, LAN accessible)
                 +-- FastAPI backend  ->  queries ClickHouse + SQLite
-                +-- React frontend   ->  served as static files
+                +-- React frontend   ->  served as static files by FastAPI
+
+---
 
 ## Notes
 
-- ClickHouse is never exposed to the LAN — GUI queries it over localhost only
-- Credentials stored in .env — never committed to git
+- ClickHouse never exposed to LAN — backend queries over localhost only
+- Credentials in .env — never committed to git
 - whitelist.db excluded from git — back it up separately
-- Auth persists for the browser session; all filters persist across refreshes
-- Test data rows tagged with special import_id for clean removal
+- All filters persist across page refreshes via localStorage
+- Auth session persists via sessionStorage (cleared on tab close)
+- Suppression uses ClickHouse native isIPAddressInRange() for CIDR matching
+- Service runs as root — scope to a dedicated user in production if needed
+- Test data tagged with special import_id for clean removal
+- python3 binary expected at /usr/bin/python3
+
+---
+
+## Branding
+
+**PRSM** — Pattern Recognition and Scoring Matrix
+
+Named for what RITA actually does: recognizing behavioral patterns in network sessions and scoring them against a threat matrix. Reactive by design — this tool helps you understand what already happened on your network.
