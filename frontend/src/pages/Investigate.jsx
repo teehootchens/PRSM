@@ -304,10 +304,10 @@ function CategoryBadge({ row }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function Investigate() {
-  const { credentials } = useAuth()
+  const { authHeader } = useAuth()
   const { datasets, setDatasets, dataset, setDataset } = useDataset()
   const { dateRangeHours, setDateRangeHours, customDateFrom, setCustomDateFrom, customDateTo, setCustomDateTo, minScore, beaconType, threatIntelOnly, protocol, showSuppressed, globalFilter, setGlobalFilter } = useFilters()
-  const auth = { auth: credentials }
+  const auth = { headers: authHeader }
 
   const [andMode, setAndMode] = useState(() => { try { return JSON.parse(localStorage.getItem('rita_investigate_and') || 'false') } catch { return false } })
   const setAndModeP = (v) => { try { localStorage.setItem('rita_investigate_and', JSON.stringify(v)) } catch {}; setAndMode(v) }

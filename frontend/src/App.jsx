@@ -141,8 +141,8 @@ function Shell() {
 }
 
 function AuthGate() {
-  const { credentials } = useAuth()
-  if (!credentials) return <Login />
+  const { token, authHeader } = useAuth()
+  if (!token) return <Login />
   return <Shell />
 }
 

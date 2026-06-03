@@ -307,10 +307,10 @@ function DistChart({ data }) {
 }
 
 export default function Dashboard() {
-  const { credentials } = useAuth()
+  const { authHeader } = useAuth()
   const { datasets, setDatasets, dataset, setDataset } = useDataset()
   const { dateRangeHours, setDateRangeHours, customDateFrom, setCustomDateFrom, customDateTo, setCustomDateTo, minScore, beaconType, threatIntelOnly, setThreatIntelOnly, protocol, showSuppressed, globalFilter, setGlobalFilter } = useFilters()
-  const auth = { auth: credentials }
+  const auth = { headers: authHeader }
   const navigate = useNavigate()
   const [data, setData] = useState(null)
   const [chartData, setChartData] = useState(null)

@@ -8,10 +8,10 @@ import FilterBar from '../components/FilterBar'
 import { formatIP } from '../utils'
 
 export default function DNS() {
-  const { credentials } = useAuth()
+  const { authHeader } = useAuth()
   const { datasets, setDatasets, dataset, setDataset } = useDataset()
   const { dateRangeHours, customDateFrom, customDateTo, minScore, beaconType, threatIntelOnly, protocol, showSuppressed } = useFilters()
-  const auth = { auth: credentials }
+  const auth = { headers: authHeader }
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)

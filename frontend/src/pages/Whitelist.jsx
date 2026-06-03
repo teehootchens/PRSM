@@ -66,7 +66,8 @@ function ConfirmDialog({ count, onConfirm, onCancel }) {
   )
 }
 
-function AddForm({ onAdded, credentials, dataset }) {
+function AddForm({ onAdded, dataset }) {
+  const { authHeader } = useAuth()
   const [value, setValue] = useState('')
   const [valueType, setValueType] = useState('src')
   const [scope, setScope] = useState('global')
@@ -83,7 +84,7 @@ function AddForm({ onAdded, credentials, dataset }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Basic ' + btoa(credentials.username + ':' + credentials.password),
+          ...authHeader,
         },
         body: JSON.stringify({
           value: value.trim(), value_type: valueType,
@@ -132,7 +133,8 @@ function AddForm({ onAdded, credentials, dataset }) {
   )
 }
 
-function ImportForm({ onImported, credentials, dataset }) {
+function ImportForm({ onImported, dataset }) {
+  const { authHeader } = useAuth()
   const fileRef = useRef(null)
   const [scope, setScope] = useState('global')
   const [expiresDays, setExpiresDays] = useState(null)
@@ -150,7 +152,7 @@ function ImportForm({ onImported, credentials, dataset }) {
       const res = await axios.post(
         `/api/whitelist/import?scope=${scope === 'dataset' ? dataset : 'global'}${expiresDays ? `&expires_days=${expiresDays}` : ''}`,
         formData,
-        { auth: credentials, headers: { 'Content-Type': 'multipart/form-data' } }
+        { headers: { ...authHeader, 'Content-Type': 'multipart/form-data' } }
       )
       setResult(res.data); onImported()
     } catch (e) { setError(e.response?.data?.detail || 'Import failed') }
@@ -183,7 +185,7 @@ function ImportForm({ onImported, credentials, dataset }) {
 }
 
 export default function Whitelist() {
-  const { credentials } = useAuth()
+  const { authHeader } = useAuth()
   const { dataset } = useDataset()
   const [suppressions, setSuppressions] = useState([])
   const [loading, setLoading] = useState(false)
@@ -194,7 +196,7 @@ export default function Whitelist() {
 
   const load = () => {
     setLoading(true)
-    axios.get('/api/whitelist', { auth: credentials })
+    axios.get('/api/whitelist', { headers: authHeader })
       .then(r => setSuppressions(r.data.suppressions))
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -203,14 +205,14 @@ export default function Whitelist() {
   useEffect(() => { load() }, [])
 
   const handleDelete = async (id) => {
-    await axios.delete(`/api/whitelist/${id}`, { auth: credentials })
+    await axios.delete(`/api/whitelist/${id}`, { headers: authHeader })
     setSelected(prev => { const n = new Set(prev); n.delete(id); return n })
     load()
   }
 
   const handleBulkDelete = async () => {
     setDeleting(true)
-    await Promise.all([...selected].map(id => axios.delete(`/api/whitelist/${id}`, { auth: credentials })))
+    await Promise.all([...selected].map(id => axios.delete(`/api/whitelist/${id}`, { headers: authHeader })))
     setSelected(new Set())
     setConfirmDialog(false)
     setDeleting(false)
@@ -265,8 +267,8 @@ export default function Whitelist() {
     <div>
       <h1 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#7c85f5', marginBottom: '1.5rem' }}>Suppression List</h1>
 
-      <AddForm onAdded={load} credentials={credentials} dataset={dataset} />
-      <ImportForm onImported={load} credentials={credentials} dataset={dataset} />
+      <AddForm onAdded={load} dataset={dataset} />
+      <ImportForm onImported={load} dataset={dataset} />
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
         <input

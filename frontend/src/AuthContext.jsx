@@ -1,38 +1,31 @@
 import { createContext, useContext, useState } from 'react'
 
 const AuthContext = createContext(null)
+export const useAuth = () => useContext(AuthContext)
 
-function load(key) {
-  try { return JSON.parse(sessionStorage.getItem(key)) } catch { return null }
-}
-function save(key, val) {
-  try { sessionStorage.setItem(key, JSON.stringify(val)) } catch {}
-}
-function clear(key) {
-  try { sessionStorage.removeItem(key) } catch {}
-}
+const STORAGE_KEY = 'prsm_token'
+const load = () => { try { return sessionStorage.getItem(STORAGE_KEY) } catch { return null } }
+const save = (v) => { try { sessionStorage.setItem(STORAGE_KEY, v) } catch {} }
+const clear = () => { try { sessionStorage.removeItem(STORAGE_KEY) } catch {} }
 
 export function AuthProvider({ children }) {
-  const [credentials, setCredentials] = useState(() => load('rita_auth'))
+  const [token, setToken] = useState(() => load())
 
-  const login = (username, password) => {
-    const creds = { username, password }
-    save('rita_auth', creds)
-    setCredentials(creds)
+  const login = (newToken) => {
+    save(newToken)
+    setToken(newToken)
   }
 
   const logout = () => {
-    clear('rita_auth')
-    setCredentials(null)
+    clear()
+    setToken(null)
   }
 
+  const authHeader = token ? { Authorization: `Bearer ${token}` } : {}
+
   return (
-    <AuthContext.Provider value={{ credentials, login, logout }}>
+    <AuthContext.Provider value={{ token, login, logout, authHeader }}>
       {children}
     </AuthContext.Provider>
   )
-}
-
-export function useAuth() {
-  return useContext(AuthContext)
 }

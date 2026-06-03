@@ -13,7 +13,7 @@ const EXPIRY_OPTIONS = [
 ]
 
 export default function SuppressDialog({ row, valueType, onClose, onSuccess }) {
-  const { credentials } = useAuth()
+  const { authHeader } = useAuth()
   const { dataset } = useDataset()
 
   const rawValue = valueType === 'src' ? row.src
@@ -35,7 +35,7 @@ export default function SuppressDialog({ row, valueType, onClose, onSuccess }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Basic ' + btoa(credentials.username + ':' + credentials.password),
+          ...authHeader,
         },
         body: JSON.stringify({
           value: displayValue,

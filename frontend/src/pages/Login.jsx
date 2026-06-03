@@ -14,15 +14,16 @@ export default function Login() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/datasets', {
-        headers: {
-          'Authorization': 'Basic ' + btoa(unescape(encodeURIComponent(`${username}:${password}`)))
-        }
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
       })
       if (res.status === 401) {
         setError('Invalid username or password')
       } else if (res.ok) {
-        login(username, password)
+        const { token } = await res.json()
+        login(token)
       } else {
         setError('Unexpected error, try again')
       }

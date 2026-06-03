@@ -5,7 +5,7 @@ import { useAuth } from '../AuthContext'
 import axios from 'axios'
 
 export default function FilterBar() {
-  const { credentials } = useAuth()
+  const { authHeader } = useAuth()
   const { dataset } = useDataset()
   const {
     dateRangeHours, setDateRangeHours,
@@ -23,7 +23,7 @@ export default function FilterBar() {
 
   useEffect(() => {
     if (!dataset) return
-    axios.get('/api/protocols', { auth: credentials, params: { dataset } })
+    axios.get('/api/protocols', { headers: authHeader, params: { dataset } })
       .then(r => setProtocols(r.data.protocols))
       .catch(() => {})
   }, [dataset])
