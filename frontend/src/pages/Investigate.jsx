@@ -289,7 +289,7 @@ function TrendChart({ data, onApplyRange }) {
 // ── Category badge ────────────────────────────────────────────────────────────
 function CategoryBadge({ row }) {
   const cats = []
-  if ((row.beacon_threat_score || 0) > 0) cats.push({ label: 'Beacon', color: '#7c85f5' })
+  if ((row.beacon_score || 0) > 0)        cats.push({ label: 'Beacon', color: '#7c85f5' })
   if ((row.long_conn_score || 0) > 0)     cats.push({ label: 'Long',   color: '#38bdf8' })
   if ((row.c2_over_dns_score || 0) > 0)   cats.push({ label: 'DNS',    color: '#a78bfa' })
   if (row.threat_intel)                   cats.push({ label: 'TI',     color: '#ef4444' })
