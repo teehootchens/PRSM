@@ -162,8 +162,7 @@ sudo journalctl -u prsm --no-pager -n 20
 
 ### After frontend changes
 ```bash
-cd /opt/PRSM/frontend && npm run build
-sudo systemctl restart prsm
+bash /opt/PRSM/build.sh
 ```
 
 ### Git (run as your-username or use prsm user)

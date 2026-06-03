@@ -284,11 +284,14 @@ export default function DataTable({ data, columns, defaultSort, onRefresh, onCel
                       >
                         <td style={{ ...CELL_STYLE, width: 32 }} />
                         {columns.map(col => {
+                          const colKey = col.id || col.accessorKey
                           const val = childRow[col.accessorKey]
                           const display = CLICKABLE.includes(col.accessorKey) ? formatIP(val) : val
                           return (
-                            <td key={col.accessorKey} style={{ ...CELL_STYLE, color: '#64748b', fontSize: 12 }}>
-                              {col.cell ? col.cell({ getValue: () => val }) : (display ?? '—')}
+                            <td key={colKey} style={{ ...CELL_STYLE, color: '#64748b', fontSize: 12 }}>
+                              {col.cell
+                                ? col.cell({ getValue: () => val, row: { original: childRow } })
+                                : (display ?? '—')}
                             </td>
                           )
                         })}
