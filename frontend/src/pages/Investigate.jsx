@@ -33,7 +33,10 @@ function ChipInput({ chips, onChange }) {
   const remove = (val) => onChange(chips.filter(c => c.value !== val))
 
   const handleKey = (e) => {
-    if (['Enter', ',', ' '].includes(e.key)) {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault()
+      add(input)
+    } else if (e.key === ' ' && !input.match(/^not$/i)) {
       e.preventDefault()
       add(input)
     } else if (e.key === 'Backspace' && !input && chips.length) {

@@ -64,7 +64,16 @@ def investigate(
     not_targets: Optional[str] = Query(None),
 ):
     client = get_client()
-    target_list = [t.strip() for t in targets.split(',') if t.strip()]
+    raw_list = [t.strip() for t in targets.split(',') if t.strip()]
+    inline_not = []
+    target_list = []
+    for t in raw_list:
+        if t.startswith('!'):
+            inline_not.append(t[1:].strip())
+        elif t.upper().startswith('NOT '):
+            inline_not.append(t[4:].strip())
+        else:
+            target_list.append(t)
 
     # If no targets specified, show all data (unfiltered by target)
     if not target_list:
@@ -78,7 +87,7 @@ def investigate(
 
     time_cond = time_condition(since_hours, date_from, date_to)
     supp_cond = get_suppression_conditions(dataset, show_suppressed)
-    not_list = [t.strip() for t in not_targets.split(',') if t.strip()] if not_targets else []
+    not_list = inline_not + ([t.strip() for t in not_targets.split(',') if t.strip()] if not_targets else [])
     if not_list:
         not_parts = [f"NOT ({build_target_conditions([t])})" for t in not_list]
         not_cond = "AND " + " AND ".join(not_parts)
