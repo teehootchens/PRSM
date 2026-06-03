@@ -1,0 +1,219 @@
+# PRSM — Pattern Recognition and Scoring Matrix
+## Claude Code Project Context
+
+---
+
+## What PRSM Is
+
+PRSM is a self-hosted cybersecurity intelligence and analytics GUI built on top of RITA v5 (Real Intelligence Threat Analytics). It provides a web-based interface for analysts to interact with RITA's ClickHouse data without using the CLI. It is a LAN-only tool, never internet-exposed.
+
+Primary use cases:
+- Cyber Threat Intelligence (CTI)
+- Incident Response (IR)
+- Threat Hunting
+- Beaconing and C2 detection
+- IOC/TTP correlation
+- Behavioral analytics and risk scoring
+- ATT&CK mapping
+
+---
+
+## Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React 18 + Vite |
+| Backend | Python 3, FastAPI, uvicorn |
+| Database | ClickHouse (via RITA v5 Docker) |
+| Suppression list | SQLite (`whitelist.db`) |
+| Reverse proxy | Nginx (TLS termination) |
+| Process manager | systemd (`prsm.service`) |
+| Auth | HMAC-signed bearer tokens (8hr expiry) |
+| Version control | GitHub (private) — `teehootchens/PRSM` |
+
+---
+
+## Directory Structure
+
+```
+/opt/PRSM/
+├── backend/
+│   ├── main.py               # FastAPI app, auth, router registration
+│   ├── db.py                 # ClickHouse connection
+│   ├── suppression_filter.py # SQLite suppression logic
+│   ├── static/               # Built frontend (Vite output)
+│   └── routers/
+│       ├── beaconing.py
+│       ├── charts.py
+│       ├── dashboard.py
+│       ├── datasets.py
+│       ├── dns.py
+│       ├── investigate.py    # Search/filter with chip system, NOT support
+│       ├── longconns.py
+│       ├── protocols.py
+│       ├── strobe.py
+│       ├── threatintel.py
+│       └── whitelist.py      # SQLite CRUD for suppression list
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx           # Router, nav, layout
+│   │   ├── AuthContext.jsx   # Token storage, authHeader provider
+│   │   ├── DatasetContext.jsx
+│   │   ├── FilterContext.jsx
+│   │   ├── assets/
+│   │   │   └── prsm-logo.svg
+│   │   ├── components/
+│   │   │   ├── FilterBar.jsx # Global min score + protocol filter
+│   │   │   └── SuppressDialog.jsx
+│   │   └── pages/
+│   │       ├── Beaconing.jsx
+│   │       ├── Dashboard.jsx
+│   │       ├── DNS.jsx
+│   │       ├── Investigate.jsx
+│   │       ├── Login.jsx
+│   │       ├── LongConns.jsx
+│   │       ├── Strobe.jsx
+│   │       ├── ThreatIntel.jsx
+│   │       └── Whitelist.jsx
+│   └── index.html
+├── .env                      # Secrets — never committed
+├── .gitignore
+├── whitelist.db              # SQLite — never committed
+└── CLAUDE.md                 # This file
+```
+
+---
+
+## Key Architecture Decisions
+
+### Auth
+- Login POSTs to `/api/login` with `{ username, password }`
+- Backend verifies with bcrypt, returns a signed HMAC token
+- Token stored in `sessionStorage` (cleared on tab close)
+- Every API request sends `Authorization: Bearer <token>`
+- `AuthContext.jsx` exposes `{ token, login, logout, authHeader }`
+- All pages use `const { authHeader } = useAuth()` and pass `{ headers: authHeader }` to axios
+
+### ClickHouse
+- Always on `127.0.0.1:8123` — never LAN-exposed
+- Connection config in `db.py`, reads from `.env`
+- RITA v5 schema — primary table is `threat_mixtape` per dataset
+
+### Suppression / Whitelist
+- SQLite at `whitelist.db` (path derived dynamically, not hardcoded)
+- Managed via `whitelist.py` router and `suppression_filter.py`
+- CIDR matching uses ClickHouse native `isIPAddressInRange()`
+
+### Investigate Page
+- Chip-based search system with OR/AND toggle (persisted in `localStorage`)
+- NOT support: chips are `{ value, negate }` objects
+- Negative chips render red with NOT badge
+- NOT chips always treated as mandatory exclusions regardless of OR/AND mode
+- Backend receives `targets` (comma-separated), `and_mode` (bool), `not_targets` (comma-separated)
+- `build_target_conditions()` in `investigate.py` handles IP, CIDR, FQDN parsing
+
+### Frontend State
+- Dataset selection: `DatasetContext`
+- Global filters (min score, protocol): `FilterContext`
+- Auth: `AuthContext`
+- Per-page filters: `localStorage`
+
+---
+
+## Infrastructure
+
+### Services
+```
+prsm.service     — uvicorn on 127.0.0.1:8080, runs as prsm user
+nginx            — TLS termination on 0.0.0.0:443, proxies to 8080
+```
+
+### Nginx
+- Config: `/etc/nginx/sites-available/prsm`
+- SSL certs: `/etc/nginx/ssl/prsm.crt` and `prsm.key`
+- Rate limiting on `/api/login`: 5 req/min per IP
+- Security headers: HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy
+
+### systemd
+- Service file: `/etc/systemd/system/prsm.service`
+- User: `prsm` (system account, no shell)
+- WorkingDirectory: `/opt/PRSM`
+- PYTHONPATH: `/opt/PRSM`
+
+### .env keys
+```
+GUI_USERNAME
+GUI_PASSWORD_HASH     # bcrypt hash
+TOKEN_SECRET          # 32-byte hex, HMAC signing key
+CLICKHOUSE_HOST       # 127.0.0.1
+CLICKHOUSE_PORT       # 8123
+CLICKHOUSE_USER       # default
+```
+
+---
+
+## Development Workflow
+
+### After backend changes
+```bash
+sudo systemctl restart prsm
+sudo journalctl -u prsm --no-pager -n 20
+```
+
+### After frontend changes
+```bash
+cd /opt/PRSM/frontend && npm run build
+sudo systemctl restart prsm
+```
+
+### Git (run as your-username or use prsm user)
+```bash
+cd /opt/PRSM
+git add -A
+git commit -m "type: description"
+git push
+# If running as root, use: sudo -u prsm git -C /opt/PRSM ...
+```
+
+### Generate bcrypt password hash
+```bash
+python3 -c "from passlib.hash import bcrypt; print(bcrypt.hash('yourpassword'))"
+```
+
+---
+
+## Nav Order (App.jsx)
+1. Dashboard
+2. Investigate
+3. Beaconing
+4. Long Connections
+5. DNS Analysis
+6. Strobe Detection
+7. Threat Intel
+8. Suppression List
+
+---
+
+## Known Issues / Watch Out For
+- `whitelist.db` and `.env` must never be committed — both in `.gitignore`
+- `investigate.router` and `whitelist.router` were previously registered multiple times — fixed, do not re-introduce
+- Git operations as root will fail with "dubious ownership" — use `your-username` or `sudo -u prsm git`
+- The `prsm` user owns `/opt/PRSM` at runtime but `your-username` is the dev user
+- Nginx `limit_req_zone` lives in `/etc/nginx/nginx.conf` http block — do not add it to the site config too
+
+---
+
+## Deferred / Roadmap
+- `setup.sh` install script — planned for v1 release
+- KQL or Lucene query language for Investigate page
+- Firewall subnet scoping (deferred — not portable across deployments)
+- Failed login UI dashboard (logs go to journald via `journalctl -u prsm`)
+
+---
+
+## Guiding Principles
+- Preserve working functionality — no rewrites without clear benefit
+- Step-by-step with verification before proceeding
+- Security tool for real SOC/CTI workflows — keep analyst usability in mind
+- Modular backend — new data types get new routers
+- No sensitive data ever committed to git
