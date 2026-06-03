@@ -347,6 +347,7 @@ export default function Investigate() {
     setLoading(true); setError(null)
     axios.get('/api/investigate', { ...auth, params: {
       dataset,
+      limit: 2000,
       targets: chips.filter(c => !c.negate).map(c => c.value).join(','),
       not_targets: chips.filter(c => c.negate).map(c => c.value).join(',') || undefined,
       and_mode: andMode === true ? true : undefined,

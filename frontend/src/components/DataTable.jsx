@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import {
   useReactTable, getCoreRowModel, getSortedRowModel,
   getFilteredRowModel, flexRender,
@@ -21,6 +21,8 @@ export function ScoreBadge({ value }) {
     </span>
   )
 }
+
+const PAGE_SIZE = 100
 
 const CELL_STYLE = {
   padding: '0.5rem 1rem',
@@ -52,6 +54,7 @@ export default function DataTable({ data, columns, defaultSort, onRefresh, onCel
   const [selectedRow, setSelectedRow] = useState(null)
   const [contextMenu, setContextMenu] = useState(null)
   const [suppressDialog, setSuppressDialog] = useState(null)
+  const [page, setPage] = useState(0)
 
   const { grouped, flatPrimary } = useMemo(() => {
     const grouped = {}
@@ -96,6 +99,15 @@ export default function DataTable({ data, columns, defaultSort, onRefresh, onCel
         return matchesFilter(src, globalFilter) || matchesFilter(dst, globalFilter) || matchesFilter(fqdn, globalFilter)
       })
     : table.getRowModel().rows
+
+  // Reset to first page when filter or data changes
+  useEffect(() => { setPage(0) }, [globalFilter, data])
+
+  const totalPages = Math.max(1, Math.ceil(visibleRows.length / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages - 1)
+  const pageRows = visibleRows.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE)
+  const rangeStart = visibleRows.length === 0 ? 0 : safePage * PAGE_SIZE + 1
+  const rangeEnd = Math.min((safePage + 1) * PAGE_SIZE, visibleRows.length)
 
   const handleCellClick = (e, colId, value) => {
     if (CLICKABLE.includes(colId) && value) {
@@ -177,6 +189,17 @@ export default function DataTable({ data, columns, defaultSort, onRefresh, onCel
     setExpanded(prev => ({ ...prev, [key]: !prev[key] }))
   }
 
+  const btnStyle = (disabled) => ({
+    background: '#1a1d27',
+    border: '1px solid #2d3148',
+    color: disabled ? '#2d3148' : '#94a3b8',
+    borderRadius: 6,
+    padding: '0.3rem 0.75rem',
+    cursor: disabled ? 'default' : 'pointer',
+    fontSize: 12,
+    fontWeight: 600,
+  })
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
@@ -198,7 +221,9 @@ export default function DataTable({ data, columns, defaultSort, onRefresh, onCel
           </button>
         )}
         <span style={{ color: '#475569', marginLeft: 'auto', fontSize: 13 }}>
-          {visibleRows.length} rows
+          {visibleRows.length > 0
+            ? `${rangeStart}–${rangeEnd} of ${visibleRows.length} rows`
+            : '0 rows'}
           {data.length !== flatPrimary.length && ` (${data.length} total with history)`}
         </span>
       </div>
@@ -219,7 +244,7 @@ export default function DataTable({ data, columns, defaultSort, onRefresh, onCel
             ))}
           </thead>
           <tbody>
-            {visibleRows.map((row, i) => {
+            {pageRows.map((row, i) => {
               const key = `${row.original.src}||${row.original.dst}||${row.original.fqdn}`
               const group = grouped[key]
               const hasChildren = group?.children?.length > 0
@@ -304,6 +329,42 @@ export default function DataTable({ data, columns, defaultSort, onRefresh, onCel
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginTop: '1rem' }}>
+          <button
+            onClick={() => setPage(0)}
+            disabled={safePage === 0}
+            style={btnStyle(safePage === 0)}
+          >
+            ««
+          </button>
+          <button
+            onClick={() => setPage(p => Math.max(0, p - 1))}
+            disabled={safePage === 0}
+            style={btnStyle(safePage === 0)}
+          >
+            ‹ Prev
+          </button>
+          <span style={{ color: '#94a3b8', fontSize: 13, minWidth: 100, textAlign: 'center' }}>
+            Page {safePage + 1} of {totalPages}
+          </span>
+          <button
+            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+            disabled={safePage === totalPages - 1}
+            style={btnStyle(safePage === totalPages - 1)}
+          >
+            Next ›
+          </button>
+          <button
+            onClick={() => setPage(totalPages - 1)}
+            disabled={safePage === totalPages - 1}
+            style={btnStyle(safePage === totalPages - 1)}
+          >
+            »»
+          </button>
+        </div>
+      )}
 
       <DetailPanel row={selectedRow} onClose={() => setSelectedRow(null)} />
 
