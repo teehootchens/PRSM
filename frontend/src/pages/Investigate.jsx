@@ -7,6 +7,27 @@ import DataTable, { ScoreBadge } from '../components/DataTable'
 import FilterBar from '../components/FilterBar'
 import { formatIP, formatBytes, formatDuration } from '../utils'
 
+// ── Score / category filter constants ────────────────────────────────────────
+const SCORE_RE    = /^(threat|beacon|longconn|dns|strobe|intel)(>=|<=|>|<|=)(\d{1,3})$/i
+const CATEGORY_RE = /^(threat|beacon|longconn|dns|strobe|intel)$/i
+const SCORE_KEYWORDS = ['threat', 'beacon', 'longconn', 'dns', 'strobe', 'intel']
+
+// Colors match the CategoryBadge tag colors so the chip visually maps to the tag
+const CATEGORY_COLORS = {
+  beacon:   '#7c85f5',
+  longconn: '#38bdf8',
+  dns:      '#a78bfa',
+  intel:    '#f87171',  // lighter red to distinguish from NOT chips
+  strobe:   '#f97316',
+  threat:   '#94a3b8',
+}
+
+function detectChipType(value) {
+  if (CATEGORY_RE.test(value)) return 'category'
+  if (SCORE_RE.test(value))    return 'score'
+  return 'target'
+}
+
 // ── Chip input ──────────────────────────────────────────────────────────────
 function ChipInput({ chips, onChange }) {
   const [input, setInput] = useState('')
@@ -15,16 +36,35 @@ function ChipInput({ chips, onChange }) {
   const parseRaw = (raw) => {
     const val = raw.trim()
     if (!val) return null
-    // Detect NOT prefix: "!8.8.8.8" or "NOT 8.8.8.8" (case-insensitive)
+
+    // Detect NOT prefix: "!expr" or "NOT expr" (case-insensitive)
+    let negate = false
+    let core = val
     const notMatch = val.match(/^(!|NOT\s+)(.+)$/i)
-    if (notMatch) return { value: notMatch[2].trim(), negate: true }
-    return { value: val, negate: false }
+    if (notMatch) {
+      negate = true
+      core = notMatch[2].trim()
+    }
+
+    // Detect bare category keyword (e.g. "beacon", "intel") — must precede score check
+    if (CATEGORY_RE.test(core)) {
+      return { value: core.toLowerCase(), negate, type: 'category' }
+    }
+
+    // Detect score filter: keyword op value (e.g. beacon>50)
+    const scoreMatch = core.match(SCORE_RE)
+    if (scoreMatch) {
+      const num = parseInt(scoreMatch[3], 10)
+      if (num < 0 || num > 100) return null  // out of range — reject silently
+      return { value: core.toLowerCase(), negate, type: 'score' }
+    }
+
+    return { value: core, negate, type: 'target' }
   }
 
   const add = (raw) => {
     const chip = parseRaw(raw)
     if (!chip) return
-    // Deduplicate by value
     if (chips.some(c => c.value === chip.value)) return
     onChange([...chips, chip])
     setInput('')
@@ -55,20 +95,25 @@ function ChipInput({ chips, onChange }) {
       }}
     >
       {chips.map(chip => {
-        const isNeg = chip.negate
-        const chipColor = isNeg ? '#ef4444' : '#7c85f5'
-        const chipBg   = isNeg ? '#ef444422' : '#7c85f522'
-        const chipBdr  = isNeg ? '#ef444455' : '#7c85f555'
+        const isNeg      = chip.negate
+        const isScore    = chip.type === 'score'
+        const isCategory = chip.type === 'category'
+        const baseColor  = isNeg      ? '#ef4444'
+                         : isCategory ? (CATEGORY_COLORS[chip.value] || '#22c55e')
+                         : isScore    ? '#eab308'
+                         : '#7c85f5'
+        const chipBg  = baseColor + '22'
+        const chipBdr = baseColor + '55'
         return (
           <span key={chip.value} style={{
             display: 'inline-flex', alignItems: 'center', gap: 4,
             background: chipBg, border: `1px solid ${chipBdr}`,
-            color: chipColor, borderRadius: 4, padding: '2px 8px', fontSize: 13, fontWeight: 600,
+            color: baseColor, borderRadius: 4, padding: '2px 8px', fontSize: 13, fontWeight: 600,
           }}>
             {isNeg && <span style={{ fontSize: 11, opacity: 0.85, marginRight: 2 }}>NOT</span>}
             {chip.value}
             <button onClick={() => remove(chip.value)} style={{
-              background: 'none', border: 'none', color: chipColor,
+              background: 'none', border: 'none', color: baseColor,
               cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0, opacity: 0.7,
             }}>✕</button>
           </span>
@@ -80,7 +125,7 @@ function ChipInput({ chips, onChange }) {
         onChange={e => setInput(e.target.value)}
         onKeyDown={handleKey}
         onBlur={() => input && add(input)}
-        placeholder={chips.length ? '' : 'IP, CIDR, or FQDN — prefix with ! or NOT to exclude...'}
+        placeholder={chips.length ? '' : 'IP, CIDR, FQDN, or score filter (e.g. beacon>50, threat>=75)...'}
         style={{
           flex: 1, minWidth: 200, background: 'none', border: 'none',
           color: '#e2e8f0', fontSize: 13, outline: 'none',
@@ -317,7 +362,11 @@ export default function Investigate() {
   const [chips, setChipsState] = useState(() => {
     try {
       const stored = JSON.parse(localStorage.getItem('rita_investigate_chips') || '[]')
-      return stored.map(c => typeof c === 'string' ? { value: c, negate: false } : c)
+      return stored.map(c => {
+        const chip = typeof c === 'string' ? { value: c, negate: false } : { ...c }
+        if (!chip.type) chip.type = detectChipType(chip.value)
+        return chip
+      })
     } catch { return [] }
   })
   const setChips = (val) => {
@@ -345,11 +394,21 @@ export default function Investigate() {
   const run = () => {
     if (!dataset) return
     setLoading(true); setError(null)
+    const targetChips       = chips.filter(c => c.type === 'target'   && !c.negate)
+    const notTargetChips    = chips.filter(c => c.type === 'target'   &&  c.negate)
+    const scoreChips        = chips.filter(c => c.type === 'score'    && !c.negate)
+    const notScoreChips     = chips.filter(c => c.type === 'score'    &&  c.negate)
+    const categoryChips     = chips.filter(c => c.type === 'category' && !c.negate)
+    const notCategoryChips  = chips.filter(c => c.type === 'category' &&  c.negate)
     axios.get('/api/investigate', { ...auth, params: {
       dataset,
       limit: 2000,
-      targets: chips.filter(c => !c.negate).map(c => c.value).join(','),
-      not_targets: chips.filter(c => c.negate).map(c => c.value).join(',') || undefined,
+      targets: targetChips.map(c => c.value).join(','),
+      not_targets: notTargetChips.length ? notTargetChips.map(c => c.value).join(',') : undefined,
+      score_filters: scoreChips.length ? scoreChips.map(c => c.value).join(',') : undefined,
+      not_score_filters: notScoreChips.length ? notScoreChips.map(c => c.value).join(',') : undefined,
+      category_filters: categoryChips.length ? categoryChips.map(c => c.value).join(',') : undefined,
+      not_category_filters: notCategoryChips.length ? notCategoryChips.map(c => c.value).join(',') : undefined,
       and_mode: andMode === true ? true : undefined,
       since_hours: (dateRangeHours && dateRangeHours !== 'custom') ? dateRangeHours : undefined,
       date_from: dateRangeHours === 'custom' ? customDateFrom || undefined : undefined,
@@ -378,10 +437,10 @@ export default function Investigate() {
     setCustomDateTo(maxDay)
   }
 
-    const handleCellClick = (value) => {
+  const handleCellClick = (value) => {
     if (!value || value === '—') return
     if (!chips.some(c => c.value === value)) {
-      setChips([...chips, { value, negate: false }])
+      setChips([...chips, { value, negate: false, type: 'target' }])
     }
   }
 
@@ -438,7 +497,7 @@ export default function Investigate() {
             </div>
             <ChipInput chips={chips} onChange={setChips} />
             <div style={{ fontSize: 11, color: '#475569', marginTop: '0.4rem' }}>
-              Press Enter, comma, or space to add. Supports IPs, CIDR ranges (10.0.0.0/24), and FQDNs.
+              Press Enter, comma, or space to add. IPs, CIDRs, FQDNs, or score filters: {SCORE_KEYWORDS.join(', ')} with operators &gt; &lt; &gt;= &lt;= = and value 0–100. Prefix any chip with ! or NOT to exclude.
             </div>
           </div>
           <button
