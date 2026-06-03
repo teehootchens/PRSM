@@ -1,3 +1,4 @@
+import os
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from typing import Optional
@@ -12,7 +13,7 @@ except ImportError:
     openpyxl = None
 
 router = APIRouter(prefix="/api/whitelist", tags=["whitelist"])
-DB_PATH = "/opt/PRSM/whitelist.db"
+DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "whitelist.db")
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)

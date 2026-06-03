@@ -1,7 +1,8 @@
+import os
 import sqlite3
 from datetime import datetime
 
-DB_PATH = "/opt/PRSM/whitelist.db"
+DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "whitelist.db")
 
 def is_cidr(value: str) -> bool:
     return '/' in value

@@ -2,7 +2,7 @@ import clickhouse_connect
 from dotenv import load_dotenv
 import os
 
-load_dotenv("/opt/PRSM/.env")
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
 
 def get_client():
     return clickhouse_connect.get_client(

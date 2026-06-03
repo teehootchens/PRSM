@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from dotenv import load_dotenv
 from passlib.hash import bcrypt
 
-load_dotenv("/opt/PRSM/.env")
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
 
 from backend.routers import (
     beaconing, datasets, longconns, dns, threatintel,
