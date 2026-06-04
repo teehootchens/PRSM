@@ -208,7 +208,7 @@ function TrendChart({ data, onApplyRange }) {
 }
 
 // ── Shared Hosts panel ────────────────────────────────────────────────────────
-function SharedHostsPanel({ target, dataset, auth, onAddChip, chips, setChips, sinceHours, dateFrom, dateTo, minScore, maxScore, showSuppressed }) {
+function SharedHostsPanel({ target, dataset, auth, onAddChip, chips, setChips, setAndMode, sinceHours, dateFrom, dateTo, minScore, maxScore, showSuppressed }) {
   const navigate = useNavigate()
   const { setGlobalFilter } = useFilters()
   const [hosts, setHosts] = useState([])
@@ -256,7 +256,10 @@ function SharedHostsPanel({ target, dataset, auth, onAddChip, chips, setChips, s
       .map(h => formatIP(h.src))
       .filter(ip => ip && ip !== '—' && !existing.has(ip))
       .map(ip => ({ value: ip, negate: false, type: 'target' }))
-    if (newChips.length > 0) setChips([...chips, ...newChips])
+    if (newChips.length > 0) {
+      setAndMode(false)
+      setChips([...chips, ...newChips])
+    }
   }
 
   const TH = { padding: '0.35rem 0.75rem', textAlign: 'left', color: '#475569', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #2d3148', whiteSpace: 'nowrap', background: '#1a1d27' }
@@ -580,6 +583,7 @@ export default function Investigate() {
               onAddChip={handleCellClick}
               chips={chips}
               setChips={setChips}
+              setAndMode={setAndModeP}
               {...sharedFilters}
             />
           )}
