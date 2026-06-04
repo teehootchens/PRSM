@@ -140,7 +140,7 @@ Shows connections that stayed open for an unusually long time. Sorted by `long_c
 - TI Hit on a long connection — confirms a known-bad destination
 - Protocol context in Connection Details — legitimate long connections are often database or VPN traffic; unusual protocols on long connections are more suspicious
 
-> **Note:** Left-clicking a src/dst/fqdn value on this page adds it to the global filter. Per-page local chip filtering is coming in a future update.
+**Chip filter bar** — A chip filter bar appears below the FilterBar. Left-clicking any src/dst/fqdn in the table adds a chip here. Chips filter results client-side after fetching. Supports IPs, CIDRs, FQDNs, score expressions, category keywords, OR/AND mode, and NOT prefix. Chips persist in `localStorage` under the key `longconns_chips`.
 
 ---
 
@@ -156,7 +156,7 @@ Shows connections scored for C2-over-DNS and DNS tunneling activity. Sorted by `
 - C2/DNS Score vs Direct Conn Score — Direct Conn Score measures whether the DNS target is also being connected to directly; a high DNS score with zero Direct Conn score suggests DNS-only tunneling
 - Short, frequently-queried domain names with high entropy in subdomains — common tunneling pattern
 
-> **Note:** Left-clicking a src/dst/fqdn value on this page adds it to the global filter. Per-page local chip filtering is coming in a future update.
+**Chip filter bar** — A chip filter bar appears below the FilterBar. Left-clicking any src/dst/fqdn in the table adds a chip here. Chips filter results client-side after fetching. Supports IPs, CIDRs, FQDNs, score expressions, category keywords, OR/AND mode, and NOT prefix. Chips persist in `localStorage` under the key `dns_chips`.
 
 ---
 
@@ -173,7 +173,7 @@ Shows hosts that made an unusually high number of individual connections to a si
 - Strobe + Beaconing on the same pair — the host is both strobing and beaconing, a strong C2 indicator
 - Internal src to external dst — strobing to external addresses is more suspicious than internal network scanning
 
-> **Note:** Left-clicking a src/dst/fqdn value on this page adds it to the global filter. Per-page local chip filtering is coming in a future update.
+**Chip filter bar** — A chip filter bar appears below the FilterBar. Left-clicking any src/dst/fqdn in the table adds a chip here. Chips filter results client-side after fetching. Supports IPs, CIDRs, FQDNs, score expressions, category keywords, OR/AND mode, and NOT prefix. Chips persist in `localStorage` under the key `strobe_chips`.
 
 ---
 
@@ -190,7 +190,7 @@ Shows connections where the destination IP or FQDN matched a threat intelligence
 - Multiple source IPs hitting the same TI destination — possible lateral movement or shared C2 infrastructure
 - TI hits against FQDNs vs IPs — FQDN-based hits survive IP rotation; IP-based hits may have higher false positive rates depending on the feed
 
-> **Note:** Left-clicking a src/dst/fqdn value on this page adds it to the global filter. Per-page local chip filtering is coming in a future update.
+**Chip filter bar** — A chip filter bar appears below the FilterBar. Left-clicking any src/dst/fqdn in the table adds a chip here. Chips filter results client-side after fetching. Supports IPs, CIDRs, FQDNs, score expressions, category keywords, OR/AND mode, and NOT prefix. Chips persist in `localStorage` under the key `threatintel_chips`.
 
 ---
 
@@ -375,13 +375,11 @@ Left-clicking a source IP, destination IP, or FQDN value in a table cell adds it
 |---|---|
 | Investigate | Adds the value as a chip in the Investigate chip bar |
 | Beaconing | Adds the value as a chip in the Beaconing chip bar |
+| Long Connections | Adds the value as a chip in the Long Connections chip bar |
+| DNS Analysis | Adds the value as a chip in the DNS Analysis chip bar |
+| Strobe Detection | Adds the value as a chip in the Strobe Detection chip bar |
+| Threat Intel | Adds the value as a chip in the Threat Intel chip bar |
 | Dashboard (top tables) | Adds the value as a chip in the Dashboard chip bar |
-| Long Connections | Adds the value to the global filter |
-| DNS Analysis | Adds the value to the global filter |
-| Strobe Detection | Adds the value to the global filter |
-| Threat Intel | Adds the value to the global filter |
-
-> Per-page local chip filtering for Long Connections, DNS Analysis, Strobe Detection, and Threat Intel is coming in a future update. These pages currently fall back to the global filter on left-click.
 
 Text selection is protected — if you click and drag to select text, the filter/chip action does not fire.
 
@@ -405,7 +403,7 @@ The context menu closes when you click anywhere outside it or press **Escape**.
 
 ### Local chip filter vs global filter
 
-**Local chips** (Investigate chip bar, Beaconing chip bar, Dashboard chip bar) only affect the page they belong to. Navigating away and back preserves the chips — they persist in `localStorage` per page.
+**Local chips** (Investigate, Beaconing, Long Connections, DNS Analysis, Strobe Detection, Threat Intel, and Dashboard chip bars) only affect the page they belong to. Navigating away and back preserves the chips — they persist in `localStorage` per page.
 
 **Global filter** (the FilterBar and the sidebar badge) affects all pages simultaneously and also persists in `localStorage`.
 
@@ -601,8 +599,8 @@ NOT updates.vendor.com
 ```
 These exclusions apply only in this Investigate session and are cleared when you clear chips or type new targets. They do not affect the Beaconing or other pages.
 
-**Step 3 — Use the chip filter bar on Beaconing for page-scoped filtering.**
-On the Beaconing page, the chip filter bar below the FilterBar accepts the same NOT syntax. Add `!203.0.113.10` to exclude that destination from Beaconing results. This persists in localStorage, so it survives page refreshes, but only applies to the Beaconing page.
+**Step 3 — Use the chip filter bar for page-scoped filtering.**
+Every detection page (Beaconing, Long Connections, DNS Analysis, Strobe Detection, Threat Intel) has a chip filter bar below the FilterBar that accepts the same NOT syntax. On the Beaconing page, add `!203.0.113.10` to exclude that destination from Beaconing results. Each page's chips persist in `localStorage` independently, so they survive page refreshes but only apply to that specific page.
 
 **Step 4 — Use suppression for permanent, dataset-wide exclusion.**
 When you have confirmed a value is legitimate and want to exclude it everywhere, permanently:
@@ -619,7 +617,7 @@ Once suppressed and **Show Suppressed** is set to Hide, that value disappears fr
 | Method | Scope | Persistence | Affects other pages |
 |---|---|---|---|
 | NOT chip in Investigate | Investigate session only | Until chip is removed | No |
-| Chip filter bar (Beaconing) | Beaconing page only | Persists in localStorage | No |
+| Chip filter bar (any detection page) | That page only | Persists in localStorage | No |
 | Suppression | All pages (global) or one dataset | Until expiry | Yes |
 
 Use NOT chips when you are in the middle of an investigation and want to tune noise temporarily. Use suppression when you have finished investigating and confirmed the traffic is legitimate.
