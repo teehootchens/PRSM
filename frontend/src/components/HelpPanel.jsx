@@ -1,5 +1,14 @@
 import { useEffect } from 'react'
 
+const CATEGORY_ROWS = [
+  { chip: 'beacon',   shows: 'Beacon score > 0',             color: '#7c85f5' },
+  { chip: 'threat',   shows: 'Overall threat score > 0',     color: '#94a3b8' },
+  { chip: 'longconn', shows: 'Long connection score > 0',    color: '#38bdf8' },
+  { chip: 'dns',      shows: 'C2-over-DNS score > 0',        color: '#a78bfa' },
+  { chip: 'strobe',   shows: 'Strobe score > 0',             color: '#f97316' },
+  { chip: 'intel',    shows: 'Threat intelligence match',    color: '#f87171' },
+]
+
 const SCORE_ROWS = [
   { kw: 'threat',   measure: 'Overall composite threat score',    ex: 'threat>=75' },
   { kw: 'beacon',   measure: 'Connection periodicity / regularity', ex: 'beacon>50' },
@@ -96,6 +105,33 @@ export default function HelpPanel({ open, onClose }) {
           <div style={{ fontSize: 11, color: '#475569', marginTop: '0.4rem' }}>
             Operators: <code style={{ color: '#94a3b8' }}>&gt; &lt; &gt;= &lt;= =</code>
             &nbsp;&nbsp;Example: <code style={{ color: '#eab308' }}>beacon&gt;75</code>
+          </div>
+        </Section>
+
+        <Section title="Category Shortcuts">
+          <div style={{ color: '#94a3b8', fontSize: 12, lineHeight: 1.6, marginBottom: '0.5rem' }}>
+            Type a category name as a chip to show all rows where that detection is present — no score threshold needed:
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={TH}>Chip</th>
+                <th style={TH}>Shows rows where…</th>
+              </tr>
+            </thead>
+            <tbody>
+              {CATEGORY_ROWS.map(r => (
+                <tr key={r.chip}>
+                  <td style={{ ...TD, fontFamily: 'monospace', color: r.color }}>{r.chip}</td>
+                  <td style={TD}>{r.shows}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div style={{ fontSize: 11, color: '#475569', marginTop: '0.4rem', lineHeight: 1.5 }}>
+            Prefix with <code style={{ color: '#ef4444' }}>!</code> or <code style={{ color: '#ef4444' }}>NOT</code> to exclude a category:
+            {' '}<code style={{ color: '#ef4444' }}>!intel</code> hides all TI-matched rows,
+            {' '}<code style={{ color: '#ef4444' }}>NOT strobe</code> removes strobe detections from results.
           </div>
         </Section>
 

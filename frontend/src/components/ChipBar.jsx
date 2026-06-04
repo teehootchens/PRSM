@@ -23,6 +23,8 @@ function InfoTooltip() {
             <li>Score filters: <code style={{ color: '#eab308' }}>beacon&gt;50</code> · <code style={{ color: '#eab308' }}>threat&gt;=75</code> · <code style={{ color: '#eab308' }}>dns&lt;25</code></li>
             <li>Operators: <code style={{ color: '#94a3b8' }}>&gt; &lt; &gt;= &lt;= =</code></li>
             <li>Keywords: <code style={{ color: '#7c85f5' }}>beacon</code> · <code style={{ color: '#94a3b8' }}>threat</code> · <code style={{ color: '#38bdf8' }}>longconn</code> · <code style={{ color: '#a78bfa' }}>dns</code> · <code style={{ color: '#f97316' }}>strobe</code> · <code style={{ color: '#f87171' }}>intel</code></li>
+            <li>Category shortcuts: type <code style={{ color: '#7c85f5' }}>beacon</code>, <code style={{ color: '#94a3b8' }}>threat</code>, <code style={{ color: '#38bdf8' }}>longconn</code>, <code style={{ color: '#a78bfa' }}>dns</code>, <code style={{ color: '#f97316' }}>strobe</code>, or <code style={{ color: '#f87171' }}>intel</code> as a chip to show all rows with that detection — faster than guessing a score threshold</li>
+            <li>Prefix with <code style={{ color: '#ef4444' }}>!</code> or <code style={{ color: '#ef4444' }}>NOT</code> to exclude a category: <code style={{ color: '#ef4444' }}>!intel</code>, <code style={{ color: '#ef4444' }}>NOT strobe</code></li>
             <li>Toggle <strong style={{ color: '#7c85f5' }}>OR</strong> / <strong style={{ color: '#eab308' }}>AND</strong> to match any or all chips</li>
           </ul>
         </div>
