@@ -362,11 +362,11 @@ function SharedHostsPanel({ target, dataset, auth, onAddChip, chips, setChips, s
 // ── Category badge ────────────────────────────────────────────────────────────
 function CategoryBadge({ row }) {
   const cats = []
-  if ((row.beacon_score || 0) > 0)        cats.push({ label: 'Beacon', color: '#7c85f5' })
-  if ((row.long_conn_score || 0) > 0)     cats.push({ label: 'Long',   color: '#38bdf8' })
-  if ((row.c2_over_dns_score || 0) > 0)   cats.push({ label: row.subdomain_count > 0 ? `DNS • ${row.subdomain_count}` : 'DNS', color: '#a78bfa' })
-  if (row.threat_intel)                   cats.push({ label: 'TI',     color: '#ef4444' })
-  if ((row.strobe_score || 0) > 0)        cats.push({ label: 'Strobe', color: '#f97316' })
+  if ((row.beacon_score || 0) >= 0.25)      cats.push({ label: 'Beacon', color: '#7c85f5' })
+  if ((row.long_conn_score || 0) >= 0.25)  cats.push({ label: 'Long',   color: '#38bdf8' })
+  if ((row.c2_over_dns_score || 0) >= 0.25) cats.push({ label: row.subdomain_count > 0 ? `DNS • ${row.subdomain_count}` : 'DNS', color: '#a78bfa' })
+  if (row.threat_intel)                    cats.push({ label: 'TI',     color: '#ef4444' })
+  if ((row.strobe_score || 0) >= 0.25)     cats.push({ label: 'Strobe', color: '#f97316' })
   return (
     <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
       {cats.map(c => (
