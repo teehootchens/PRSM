@@ -232,11 +232,19 @@ export default function Whitelist() {
     }
   }
 
-  const rawFiltered = suppressions.filter(s =>
-    s.value.includes(filter) ||
-    s.scope.includes(filter) ||
-    (s.reason || '').toLowerCase().includes(filter.toLowerCase())
-  )
+  const TYPE_DISPLAY = { src: 'source ip', dst: 'dest ip', fqdn: 'fqdn' }
+
+  const rawFiltered = suppressions.filter(s => {
+    if (!filter) return true
+    const q = filter.toLowerCase()
+    return (
+      s.value_type.toLowerCase().includes(q) ||
+      (TYPE_DISPLAY[s.value_type] || '').includes(q) ||
+      s.value.toLowerCase().includes(q) ||
+      s.scope.toLowerCase().includes(q) ||
+      (s.reason || '').toLowerCase().includes(q)
+    )
+  })
 
   // Group by value+scope so same IP shows as one row with multiple type badges
   const groupMap = {}
@@ -354,13 +362,11 @@ export default function Whitelist() {
                       {g.types.map((t, ti) => (
                         <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: typeColor(t) + '22', color: typeColor(t), border: `1px solid ${typeColor(t)}55`, borderRadius: 4, padding: '1px 8px', fontSize: 11, fontWeight: 600 }}>
                           {typeLabel(t)}
-                          {g.types.length > 1 && (
-                            <button
-                              onClick={() => handleDelete(g.ids[ti])}
-                              title={`Remove ${typeLabel(t)} only`}
-                              style={{ background: 'none', border: 'none', color: typeColor(t), cursor: 'pointer', fontSize: 11, padding: 0, lineHeight: 1, opacity: 0.7 }}
-                            >✕</button>
-                          )}
+                          <button
+                            onClick={() => handleDelete(g.ids[ti])}
+                            title={`Remove ${typeLabel(t)} only`}
+                            style={{ background: 'none', border: 'none', color: typeColor(t), cursor: 'pointer', fontSize: 11, padding: 0, lineHeight: 1, opacity: 0.7 }}
+                          >✕</button>
                         </span>
                       ))}
                     </div>
