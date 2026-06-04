@@ -73,7 +73,7 @@ export default function Strobe() {
         <div style={{ color: '#475569', padding: '2rem', textAlign: 'center' }}>No data available for this dataset.</div>
       )}
       {!loading && data.length > 0 && (
-        <DataTable data={filteredData} columns={columns} onRefresh={() => setRefreshKey(k => k + 1)} defaultSort={[{ id: 'strobe_score', desc: true }]} onCellClick={addChip} />
+        <DataTable data={filteredData} columns={columns} onRefresh={() => setRefreshKey(k => k + 1)} defaultSort={[{ id: 'strobe_score', desc: true }]} onCellClick={addChip} hideGlobalFilter />
       )}
     </div>
   )

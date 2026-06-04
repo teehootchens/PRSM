@@ -75,7 +75,7 @@ export default function ThreatIntel() {
         </div>
       )}
       {!loading && data.length > 0 && (
-        <DataTable data={filteredData} columns={columns} onRefresh={() => setRefreshKey(k => k + 1)} defaultSort={[{ id: 'threat_intel_score', desc: true }]} onCellClick={addChip} />
+        <DataTable data={filteredData} columns={columns} onRefresh={() => setRefreshKey(k => k + 1)} defaultSort={[{ id: 'threat_intel_score', desc: true }]} onCellClick={addChip} hideGlobalFilter />
       )}
     </div>
   )

@@ -79,6 +79,7 @@ export default function Beaconing() {
           onRefresh={() => setRefreshKey(k => k + 1)}
           defaultSort={[{ id: 'beacon_threat_score', desc: true }]}
           onCellClick={addChip}
+          hideGlobalFilter
         />
       )}
     </div>

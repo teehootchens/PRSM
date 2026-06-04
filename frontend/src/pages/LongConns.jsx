@@ -72,7 +72,7 @@ export default function LongConns() {
       {!loading && data.length === 0 && !error && (
         <div style={{ color: '#475569', padding: '2rem', textAlign: 'center' }}>No data available for this dataset.</div>
       )}
-      {!loading && data.length > 0 && <DataTable data={filteredData} columns={columns} onRefresh={() => setRefreshKey(k => k + 1)} defaultSort={[{ id: 'long_conn_score', desc: true }]} onCellClick={addChip} />}
+      {!loading && data.length > 0 && <DataTable data={filteredData} columns={columns} onRefresh={() => setRefreshKey(k => k + 1)} defaultSort={[{ id: 'long_conn_score', desc: true }]} onCellClick={addChip} hideGlobalFilter />}
     </div>
   )
 }

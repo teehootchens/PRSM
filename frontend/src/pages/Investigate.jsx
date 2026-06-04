@@ -357,21 +357,6 @@ export default function Investigate() {
       <FilterBar />
 
       <ChipBar chips={chips} setChips={setChips} andMode={andMode} setAndMode={setAndModeP} />
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-        <button
-          onClick={run}
-          disabled={loading}
-          style={{
-            background: '#7c85f5', border: 'none', color: '#fff',
-            borderRadius: 6, padding: '0.4rem 1.25rem',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap',
-            opacity: loading ? 0.7 : 1,
-          }}
-        >
-          {loading ? 'Investigating...' : 'Investigate'}
-        </button>
-      </div>
 
       {error && <div style={{ color: '#ef4444', marginBottom: '1rem' }}>{error}</div>}
       {loading && <div style={{ color: '#7c85f5' }}>Running investigation...</div>}
