@@ -193,6 +193,7 @@ export default function Whitelist() {
   const [selected, setSelected] = useState(new Set())
   const [confirmDialog, setConfirmDialog] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState(null)
 
   const load = () => {
     setLoading(true)
@@ -205,18 +206,30 @@ export default function Whitelist() {
   useEffect(() => { load() }, [])
 
   const handleDelete = async (id) => {
-    await axios.delete(`/api/whitelist/${id}`, { headers: authHeader })
-    setSelected(prev => { const n = new Set(prev); n.delete(id); return n })
-    load()
+    setDeleteError(null)
+    try {
+      await axios.delete(`/api/whitelist/${id}`, { headers: authHeader })
+      setSelected(prev => { const n = new Set(prev); n.delete(id); return n })
+    } catch (e) {
+      setDeleteError(e.response?.data?.detail || 'Failed to delete — try again')
+    } finally {
+      load()
+    }
   }
 
   const handleBulkDelete = async () => {
     setDeleting(true)
-    await Promise.all([...selected].map(id => axios.delete(`/api/whitelist/${id}`, { headers: authHeader })))
-    setSelected(new Set())
-    setConfirmDialog(false)
-    setDeleting(false)
-    load()
+    setDeleteError(null)
+    try {
+      await Promise.all([...selected].map(id => axios.delete(`/api/whitelist/${id}`, { headers: authHeader })))
+      setSelected(new Set())
+      setConfirmDialog(false)
+    } catch (e) {
+      setDeleteError(e.response?.data?.detail || 'Failed to delete one or more entries — try again')
+    } finally {
+      setDeleting(false)
+      load()
+    }
   }
 
   const rawFiltered = suppressions.filter(s =>
@@ -296,6 +309,7 @@ export default function Whitelist() {
         </span>
       </div>
 
+      {deleteError && <div style={{ color: '#ef4444', fontSize: 13, marginBottom: '0.75rem' }}>{deleteError}</div>}
       {loading && <div style={{ color: '#7c85f5' }}>Loading...</div>}
 
       {!loading && filtered.length === 0 && (

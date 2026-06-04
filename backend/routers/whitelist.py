@@ -16,8 +16,11 @@ router = APIRouter(prefix="/api/whitelist", tags=["whitelist"])
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "whitelist.db")
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
+    # MEMORY journal avoids creating sidecar files in the directory,
+    # allowing the service user to write despite lacking directory write perms.
+    conn.execute("PRAGMA journal_mode=MEMORY")
     return conn
 
 def expiry_date(days: Optional[int]) -> Optional[str]:
@@ -124,42 +127,45 @@ async def import_excel(file: UploadFile = File(...), scope: str = "global", expi
     added, skipped, invalid = 0, 0, 0
     conn = get_db()
 
-    for row in ws.iter_rows(values_only=True):
-        raw = row[0]
-        if raw is None:
-            continue
-        value = clean_ip(str(raw).strip())
-        if not value:
-            continue
-
-        # Determine if IP, CIDR, or FQDN
-        try:
-            ipaddress.ip_network(value, strict=False)
-            if '/' in value:
-                # CIDR — add as both src and dst
-                types = ['src', 'dst']
-            else:
-                # Plain IP — add as both src and dst
-                ipaddress.ip_address(value)
-                types = ['src', 'dst']
-        except ValueError:
-            # Treat as FQDN
-            types = ['fqdn']
-            if '.' not in value:
-                invalid += 1
+    try:
+        for row in ws.iter_rows(values_only=True):
+            raw = row[0]
+            if raw is None:
+                continue
+            value = clean_ip(str(raw).strip())
+            if not value:
                 continue
 
-        for vtype in types:
+            # Determine if IP, CIDR, or FQDN
             try:
-                conn.execute(
-                    """INSERT INTO suppressions (value, value_type, scope, reason, expires_at)
-                       VALUES (?, ?, ?, 'Imported from Excel', ?)""",
-                    (value, vtype, scope, expiry_date(expires_days))
-                )
-                added += 1
-            except sqlite3.IntegrityError:
-                skipped += 1
+                ipaddress.ip_network(value, strict=False)
+                if '/' in value:
+                    # CIDR — add as both src and dst
+                    types = ['src', 'dst']
+                else:
+                    # Plain IP — add as both src and dst
+                    ipaddress.ip_address(value)
+                    types = ['src', 'dst']
+            except ValueError:
+                # Treat as FQDN
+                types = ['fqdn']
+                if '.' not in value:
+                    invalid += 1
+                    continue
 
-    conn.commit()
-    conn.close()
+            for vtype in types:
+                try:
+                    conn.execute(
+                        """INSERT INTO suppressions (value, value_type, scope, reason, expires_at)
+                           VALUES (?, ?, ?, 'Imported from Excel', ?)""",
+                        (value, vtype, scope, expiry_date(expires_days))
+                    )
+                    added += 1
+                except sqlite3.IntegrityError:
+                    skipped += 1
+
+        conn.commit()
+    finally:
+        conn.close()
+
     return {"added": added, "skipped": skipped, "invalid": invalid}
