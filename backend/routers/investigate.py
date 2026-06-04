@@ -179,8 +179,11 @@ def investigate(
 
     base_where = f"WHERE {target_cond} {time_cond} {supp_cond} {extra_cond} {not_cond}"
 
+    empty = {"targets": target_list, "dataset": dataset, "summary": {}, "trend": [], "results": [], "count": 0}
+
     # Summary stats
-    summary_q = client.query(f"""
+    try:
+      summary_q = client.query(f"""
         SELECT
             count()                          AS total_connections,
             max(beacon_threat_score)         AS max_beacon_score,
@@ -195,7 +198,9 @@ def investigate(
             SELECT *, last_seen AS ls FROM `{dataset}`.threat_mixtape
             {base_where}
         )
-    """)
+      """)
+    except Exception:
+        return empty
     sr = summary_q.result_rows[0] if summary_q.result_rows else None
     summary = {}
     if sr:
@@ -207,7 +212,8 @@ def investigate(
                 summary[k] = str(summary[k])
 
     # Trend — daily counts, max score, total bytes
-    trend_q = client.query(f"""
+    try:
+      trend_q = client.query(f"""
         SELECT
             toDate(last_seen)            AS day,
             count()                      AS connections,
@@ -219,7 +225,9 @@ def investigate(
         )
         GROUP BY day
         ORDER BY day
-    """)
+      """)
+    except Exception:
+        return empty
     trend = [
         {
             "day":         str(row[0]),
@@ -231,7 +239,8 @@ def investigate(
     ]
 
     # Unified results table
-    results_q = client.query(f"""
+    try:
+      results_q = client.query(f"""
         SELECT
             IPv6NumToString(src)        AS src,
             IPv6NumToString(dst)        AS dst,
@@ -266,7 +275,9 @@ def investigate(
             ORDER BY beacon_threat_score DESC
             LIMIT {limit}
         )
-    """)
+      """)
+    except Exception:
+        return empty
     results = [dict(zip(results_q.column_names, row)) for row in results_q.result_rows]
 
     return {

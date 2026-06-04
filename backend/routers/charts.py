@@ -13,6 +13,7 @@ def get_charts(
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
     min_score: float = Query(0.0),
+    max_score: Optional[float] = Query(None),
     beacon_type: Optional[str] = Query(None),
     threat_intel_only: bool = Query(False),
     protocol: Optional[str] = Query(None),
@@ -28,23 +29,28 @@ def get_charts(
     base_where = (" AND " + " AND ".join(base)) if base else ""
     ti_where = "AND threat_intel = true" if threat_intel_only else ""
     ms = min_score
+    ceiling = f" AND beacon_threat_score <= {max_score}" if max_score is not None else ""
 
     inner_where = f"WHERE 1=1 {ti_where} {base_where} {time_cond} {supp_cond}"
+    empty = {"trend": [], "distribution": {"critical": 0, "high": 0, "medium": 0, "low": 0}}
 
-    trend = client.query(f"""
-        SELECT
-            toDate(last_seen) AS day,
-            countIf(beacon_threat_score >= {ms} AND beacon_threat_score > 0) AS beaconing,
-            countIf(threat_intel = true AND threat_intel_score >= {ms}) AS ti_hits,
-            countIf(long_conn_score >= {ms} AND long_conn_score > 0) AS long_conns,
-            countIf(c2_over_dns_score >= {ms} AND c2_over_dns_score > 0) AS dns,
-            countIf(strobe_score >= {ms} AND strobe_score > 0) AS strobe
-        FROM (
-            SELECT * FROM `{dataset}`.threat_mixtape
-            {inner_where}
-        )
-        GROUP BY day ORDER BY day
-    """)
+    try:
+        trend = client.query(f"""
+            SELECT
+                toDate(last_seen) AS day,
+                countIf(beacon_threat_score >= {ms} AND beacon_threat_score > 0{ceiling}) AS beaconing,
+                countIf(threat_intel = true AND threat_intel_score >= {ms}{ceiling}) AS ti_hits,
+                countIf(long_conn_score >= {ms} AND long_conn_score > 0{ceiling}) AS long_conns,
+                countIf(c2_over_dns_score >= {ms} AND c2_over_dns_score > 0{ceiling}) AS dns,
+                countIf(strobe_score >= {ms} AND strobe_score > 0{ceiling}) AS strobe
+            FROM (
+                SELECT * FROM `{dataset}`.threat_mixtape
+                {inner_where}
+            )
+            GROUP BY day ORDER BY day
+        """)
+    except Exception:
+        return empty
 
     trend_rows = [
         {"day": str(r[0]), "beaconing": r[1], "threat_intel": r[2],
@@ -52,17 +58,20 @@ def get_charts(
         for r in trend.result_rows
     ]
 
-    dist = client.query(f"""
-        SELECT
-            countIf(beacon_threat_score >= 0.75) AS critical,
-            countIf(beacon_threat_score >= 0.50 AND beacon_threat_score < 0.75) AS high,
-            countIf(beacon_threat_score >= 0.25 AND beacon_threat_score < 0.50) AS medium,
-            countIf(beacon_threat_score > 0     AND beacon_threat_score < 0.25) AS low
-        FROM (
-            SELECT * FROM `{dataset}`.threat_mixtape
-            {inner_where}
-        )
-    """)
+    try:
+        dist = client.query(f"""
+            SELECT
+                countIf(beacon_threat_score >= 0.75) AS critical,
+                countIf(beacon_threat_score >= 0.50 AND beacon_threat_score < 0.75) AS high,
+                countIf(beacon_threat_score >= 0.25 AND beacon_threat_score < 0.50) AS medium,
+                countIf(beacon_threat_score > 0     AND beacon_threat_score < 0.25) AS low
+            FROM (
+                SELECT * FROM `{dataset}`.threat_mixtape
+                {inner_where}
+            )
+        """)
+    except Exception:
+        return {"trend": trend_rows, "distribution": {"critical": 0, "high": 0, "medium": 0, "low": 0}}
 
     dist_row = dist.result_rows[0] if dist.result_rows else (0, 0, 0, 0)
     return {

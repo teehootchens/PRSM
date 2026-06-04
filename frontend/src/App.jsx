@@ -127,15 +127,28 @@ function LastIngestedBadge() {
   const { dataset } = useDataset()
   const { authHeader } = useAuth()
   const [info, setInfo] = useState(null)
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
     if (!dataset) return
+    setLoaded(false)
     axios.get('/api/datasets/last_seen', { headers: authHeader, params: { dataset } })
       .then(r => setInfo(r.data))
-      .catch(() => {})
+      .catch(() => setInfo(null))
+      .finally(() => setLoaded(true))
   }, [dataset])
 
-  if (!info?.last_seen) return null
+  if (!loaded) return null
+
+  if (!info?.last_seen) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+        <span style={{ color: '#475569', fontSize: 9 }}>●</span>
+        <span style={{ fontSize: 11, color: '#475569' }}>RITA last ingested data:</span>
+        <span style={{ fontSize: 11, color: '#475569', fontWeight: 600 }}>no data yet</span>
+      </div>
+    )
+  }
 
   const rel = relativeTime(info.last_seen)
   const diffH = (Date.now() - new Date(info.last_seen).getTime()) / 3600000
@@ -144,7 +157,7 @@ function LastIngestedBadge() {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
       <span style={{ color, fontSize: 9 }}>●</span>
-      <span style={{ fontSize: 11, color: '#475569' }}>RITA last saw data</span>
+      <span style={{ fontSize: 11, color: '#475569' }}>RITA last ingested data:</span>
       <span style={{ fontSize: 11, color, fontWeight: 600 }}>{rel}</span>
     </div>
   )
@@ -183,7 +196,7 @@ function Shell() {
         </div>
       </nav>
       <main className="content">
-        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.35rem', marginBottom: '1rem' }}>
           <button
             onClick={() => setHelpOpen(true)}
             style={{

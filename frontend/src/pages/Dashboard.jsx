@@ -1,13 +1,15 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '../AuthContext'
 import { useDataset } from '../DatasetContext'
 import { useFilters } from '../FiltersContext'
 import FilterBar from '../components/FilterBar'
+import ChipBar from '../components/ChipBar'
 import ContextMenu from '../components/ContextMenu'
 import SuppressDialog from '../components/SuppressDialog'
-import { formatIP } from '../utils'
+import { usePageChips } from '../hooks/usePageChips'
+import { formatIP, applyChips } from '../utils'
 
 function formatDur(seconds) {
   if (!seconds) return '—'
@@ -51,13 +53,37 @@ function StatCard({ label, value, color, onClick }) {
   )
 }
 
-function TopTable({ title, rows, scoreKey, color, onIPClick, extraCols = [], onRowContextMenu }) {
+function TopTable({ title, rows, scoreKey, color, onCellClick, onSuppress, extraCols = [] }) {
+  const navigate = useNavigate()
+  const { setGlobalFilter } = useFilters()
+  const [contextMenu, setContextMenu] = useState(null)
+
+  const openValueMenu = (e, row, value, valueType) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setContextMenu({
+      x: e.clientX, y: e.clientY,
+      items: [
+        { icon: '🚫', label: `Suppress: ${value}`,               onClick: () => onSuppress(row, valueType) },
+        { icon: '🔍', label: `Add to global filter: ${value}`,   onClick: () => setGlobalFilter(value) },
+        { icon: '🔎', label: `Pivot to Investigate: ${value}`,   onClick: () => navigate('/investigate', { state: { pivot: value } }) },
+      ],
+    })
+  }
+
   if (!rows || rows.length === 0) return (
     <div style={{ background: '#1a1d27', border: '1px solid #2d3148', borderRadius: 8, overflow: 'hidden' }}>
       <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #2d3148', color, fontWeight: 600, fontSize: 13 }}>{title}</div>
       <div style={{ padding: '1rem', color: '#475569', fontSize: 13 }}>No data</div>
     </div>
   )
+
+  const spanStyle = { color: '#93c5fd', textDecoration: 'underline dotted', cursor: 'pointer' }
+  const spanHover = {
+    onMouseEnter: e => { e.currentTarget.style.color = '#60a5fa' },
+    onMouseLeave: e => { e.currentTarget.style.color = '#93c5fd' },
+  }
+
   return (
     <div style={{ background: '#1a1d27', border: '1px solid #2d3148', borderRadius: 8, overflow: 'auto' }}>
       <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #2d3148', color, fontWeight: 600, fontSize: 13 }}>{title}</div>
@@ -73,23 +99,32 @@ function TopTable({ title, rows, scoreKey, color, onIPClick, extraCols = [], onR
           {rows.map((row, i) => {
             const pct = Math.round((row[scoreKey] || 0) * 100)
             const sc = pct >= 75 ? '#ef4444' : pct >= 50 ? '#f97316' : pct >= 25 ? '#eab308' : '#22c55e'
+            const srcVal = formatIP(row.src)
+            const dstType = row.fqdn ? 'fqdn' : 'dst'
+            const dstVal = row.fqdn || formatIP(row.dst)
             return (
-              <tr key={i} style={{ borderTop: '1px solid #1e2235', cursor: 'context-menu' }}
-                onContextMenu={e => onRowContextMenu && onRowContextMenu(e, row)}>
+              <tr key={i} style={{ borderTop: '1px solid #1e2235' }}>
                 <td style={{ padding: '0.4rem 0.75rem', whiteSpace: 'nowrap' }}>
                   {row.threat_intel ? <span style={{ color: '#ef4444', fontWeight: 700, fontSize: 12 }}>YES</span> : <span style={{ color: '#475569', fontSize: 12 }}>—</span>}
                 </td>
                 <td style={{ padding: '0.4rem 0.75rem', whiteSpace: 'nowrap' }}>
                   <span style={{ background: sc + '22', color: sc, border: `1px solid ${sc}55`, borderRadius: 4, padding: '1px 6px', fontWeight: 600, fontSize: 12 }}>{pct}%</span>
                 </td>
-                <td style={{ padding: '0.4rem 0.75rem', color: '#93c5fd', cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap' }}
-                  onClick={() => onIPClick(formatIP(row.src))} title={`Filter by ${formatIP(row.src)}`}>
-                  {formatIP(row.src)}
+                <td style={{ padding: '0.4rem 0.75rem', fontSize: 12, whiteSpace: 'nowrap' }}>
+                  <span
+                    onClick={() => onCellClick(srcVal)}
+                    onContextMenu={e => openValueMenu(e, row, srcVal, 'src')}
+                    style={spanStyle} title="Left-click to filter · Right-click for options"
+                    {...spanHover}
+                  >{srcVal}</span>
                 </td>
-                <td style={{ padding: '0.4rem 0.75rem', color: '#93c5fd', cursor: 'pointer', fontSize: 12, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                  onClick={() => onIPClick(row.fqdn || formatIP(row.dst))}
-                  title={`Filter by ${row.fqdn || formatIP(row.dst)}`}>
-                  {row.fqdn || formatIP(row.dst)}
+                <td style={{ padding: '0.4rem 0.75rem', fontSize: 12, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span
+                    onClick={() => onCellClick(dstVal)}
+                    onContextMenu={e => openValueMenu(e, row, dstVal, dstType)}
+                    style={spanStyle} title="Left-click to filter · Right-click for options"
+                    {...spanHover}
+                  >{dstVal}</span>
                 </td>
                 {extraCols.map(c => (
                   <td key={c.label} style={{ padding: '0.4rem 0.75rem', color: '#94a3b8', fontSize: 12, whiteSpace: 'nowrap' }}>
@@ -101,6 +136,9 @@ function TopTable({ title, rows, scoreKey, color, onIPClick, extraCols = [], onR
           })}
         </tbody>
       </table>
+      {contextMenu && (
+        <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenu.items} onClose={() => setContextMenu(null)} />
+      )}
     </div>
   )
 }
@@ -250,57 +288,77 @@ function TrendChart({ data, onApplyRange }) {
   )
 }
 
-function DistChart({ data }) {
-  const canvasRef = useRef(null)
-  const chartRef = useRef(null)
+const DIST_BANDS = [
+  { key: 'critical', label: 'Critical', range: '75–100%', color: '#ef4444', floor: 0.75, ceiling: null   },
+  { key: 'high',     label: 'High',     range: '50–74%',  color: '#f97316', floor: 0.50, ceiling: 0.7499 },
+  { key: 'medium',   label: 'Medium',   range: '25–49%',  color: '#eab308', floor: 0.25, ceiling: 0.4999 },
+  { key: 'low',      label: 'Low',      range: '1–24%',   color: '#22c55e', floor: 0.01, ceiling: 0.2499 },
+]
 
-  useEffect(() => {
-    if (!data || !canvasRef.current) return
-    if (typeof window.Chart === 'undefined') return
-    if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null }
-
-    const total = (data.critical + data.high + data.medium + data.low) || 1
-
-    chartRef.current = new window.Chart(canvasRef.current, {
-      type: 'bar',
-      data: {
-        labels: [
-          `Critical >=75% (${data.critical})`,
-          `High 50-75% (${data.high})`,
-          `Medium 25-50% (${data.medium})`,
-          `Low <25% (${data.low})`,
-        ],
-        datasets: [{
-          data: [data.critical, data.high, data.medium, data.low],
-          backgroundColor: ['#ef444488', '#f9731688', '#eab30888', '#22c55e88'],
-          borderColor:     ['#ef4444',   '#f97316',   '#eab308',   '#22c55e'],
-          borderWidth: 1, borderRadius: 4,
-        }]
-      },
-      options: {
-        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            backgroundColor: '#1a1d27', borderColor: '#2d3148', borderWidth: 1,
-            titleColor: '#94a3b8', bodyColor: '#e2e8f0',
-            callbacks: { label: ctx => ` ${ctx.parsed.x} detections (${Math.round((ctx.parsed.x / total) * 100)}%)` }
-          }
-        },
-        scales: {
-          x: { grid: { color: '#1e2235' }, ticks: { color: '#475569', font: { size: 10 } }, beginAtZero: true },
-          y: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 11 } } }
-        }
-      }
-    })
-    return () => { if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null } }
-  }, [data])
+function DistChart({ data, selectedBands, onBandClick }) {
+  if (!data) return null
+  const counts = { critical: data.critical, high: data.high, medium: data.medium, low: data.low }
+  const total = Math.max(Object.values(counts).reduce((s, v) => s + v, 0), 1)
+  const anySelected = selectedBands.size > 0
 
   return (
     <div style={{ background: '#1a1d27', border: '1px solid #2d3148', borderRadius: 8, padding: '1rem' }}>
-      <div style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', marginBottom: '0.75rem' }}>Score distribution</div>
-      <div style={{ position: 'relative', height: 160 }}>
-        <canvas ref={canvasRef} role="img" aria-label="Horizontal bar chart showing score distribution" />
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginBottom: '0.75rem' }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8' }}>Score distribution</span>
+        <span style={{ fontSize: 11, color: '#475569' }}>— click to filter</span>
+        {anySelected && (
+          <button
+            onClick={() => onBandClick(null)}
+            style={{ marginLeft: 'auto', background: 'none', border: '1px solid #2d3148', color: '#475569', borderRadius: 4, padding: '1px 6px', cursor: 'pointer', fontSize: 10 }}
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+        {DIST_BANDS.map(band => {
+          const count = counts[band.key]
+          const isSelected = selectedBands.has(band.key)
+          const isDimmed = anySelected && !isSelected
+          const barPct = Math.round((count / total) * 100)
+          return (
+            <div
+              key={band.key}
+              onClick={() => onBandClick(band.key)}
+              style={{
+                cursor: 'pointer',
+                opacity: isDimmed ? 0.28 : 1,
+                transition: 'opacity 0.15s',
+                padding: '0.35rem 0.5rem',
+                borderRadius: 5,
+                background: isSelected ? band.color + '12' : 'transparent',
+                border: `1px solid ${isSelected ? band.color + '55' : 'transparent'}`,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 3 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem' }}>
+                  <span style={{ fontSize: 12, fontWeight: isSelected ? 700 : 500, color: isSelected ? band.color : '#94a3b8', transition: 'color 0.15s' }}>
+                    {band.label}
+                  </span>
+                  <span style={{ fontSize: 10, color: '#475569' }}>{band.range}</span>
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 600, color: isSelected ? band.color : '#64748b', fontVariantNumeric: 'tabular-nums', transition: 'color 0.15s' }}>
+                  {count.toLocaleString()}
+                </span>
+              </div>
+              <div style={{ background: '#0f1117', borderRadius: 3, height: 6, overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%',
+                  width: `${barPct}%`,
+                  minWidth: count > 0 ? 3 : 0,
+                  borderRadius: 3,
+                  background: isSelected ? band.color : band.color + '55',
+                  transition: 'background 0.15s',
+                }} />
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -309,7 +367,8 @@ function DistChart({ data }) {
 export default function Dashboard() {
   const { authHeader } = useAuth()
   const { datasets, setDatasets, dataset, setDataset } = useDataset()
-  const { dateRangeHours, setDateRangeHours, customDateFrom, setCustomDateFrom, customDateTo, setCustomDateTo, minScore, beaconType, threatIntelOnly, setThreatIntelOnly, protocol, showSuppressed, globalFilter, setGlobalFilter } = useFilters()
+  const { dateRangeHours, setDateRangeHours, customDateFrom, setCustomDateFrom, customDateTo, setCustomDateTo, minScore, setMinScore, maxScore, setMaxScore, beaconType, threatIntelOnly, setThreatIntelOnly, protocol, showSuppressed } = useFilters()
+  const { chips, setChips, addChip, andMode, setAndMode } = usePageChips('dashboard_chips')
   const auth = { headers: authHeader }
   const navigate = useNavigate()
   const [data, setData] = useState(null)
@@ -320,6 +379,44 @@ export default function Dashboard() {
   const [contextMenu, setContextMenu] = useState(null)
   const [suppressDialog, setSuppressDialog] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [selectedBands, setSelectedBands] = useState(new Set())
+  const bandSyncRef = useRef(false)
+
+  const handleBandClick = (key) => {
+    if (key === null) {
+      setSelectedBands(new Set())
+      bandSyncRef.current = true
+      setMinScore(0); setMaxScore(1)
+      return
+    }
+    setSelectedBands(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+
+      if (next.size === 0) {
+        bandSyncRef.current = true
+        setMinScore(0); setMaxScore(1)
+        return next
+      }
+
+      const floors = [...next].map(k => DIST_BANDS.find(b => b.key === k).floor)
+      const floor = Math.min(...floors)
+      const highestBand = DIST_BANDS.find(b => next.has(b.key))  // ordered high→low
+      const ceil = highestBand?.ceiling ?? null  // null = Critical selected, no upper bound
+
+      bandSyncRef.current = true
+      setMinScore(floor)
+      setMaxScore(ceil !== null ? ceil : 1)  // 1 = full range (no ceiling)
+      return next
+    })
+  }
+
+  // When either slider handle moves externally, deselect all bands
+  useEffect(() => {
+    if (bandSyncRef.current) { bandSyncRef.current = false; return }
+    setSelectedBands(new Set())
+  }, [minScore, maxScore])
 
   useEffect(() => {
     if (window.Chart && window.ChartZoom) { setChartjsLoaded(true); return }
@@ -347,6 +444,7 @@ export default function Dashboard() {
   const params = {
     dataset,
     min_score: minScore,
+    max_score: maxScore < 1 ? maxScore : undefined,
     since_hours: (dateRangeHours && dateRangeHours !== 'custom') ? dateRangeHours : undefined,
     date_from: dateRangeHours === 'custom' ? customDateFrom || undefined : undefined,
     date_to: dateRangeHours === 'custom' ? customDateTo || undefined : undefined,
@@ -366,41 +464,12 @@ export default function Dashboard() {
       .then(([dash, charts]) => { setData(dash.data); setChartData(charts.data) })
       .catch(() => setError('Failed to load dashboard'))
       .finally(() => setLoading(false))
-  }, [dataset, minScore, dateRangeHours, customDateFrom, customDateTo, beaconType, threatIntelOnly, protocol, showSuppressed, refreshKey])
-
-  const handleIPClick = (ip) => {
-    const selection = window.getSelection()
-    if (selection && selection.toString().length > 0) return
-    setGlobalFilter(ip)
-  }
+  }, [dataset, minScore, maxScore, dateRangeHours, customDateFrom, customDateTo, beaconType, threatIntelOnly, protocol, showSuppressed, refreshKey])
 
   const handleApplyRange = (minDay, maxDay) => {
     setDateRangeHours('custom')
     setCustomDateFrom(minDay)
     setCustomDateTo(maxDay)
-  }
-
-  const handleRowContextMenu = (e, row) => {
-    e.preventDefault()
-    const srcIP = formatIP(row.src)
-    const dstIP = formatIP(row.dst)
-    const fqdn  = row.fqdn
-    const items = []
-    if (srcIP) items.push({ icon: 'X', label: `Suppress src: ${srcIP}`, onClick: () => setSuppressDialog({ row, valueType: 'src' }) })
-    if (dstIP) items.push({ icon: 'X', label: `Suppress dst: ${dstIP}`, onClick: () => setSuppressDialog({ row, valueType: 'dst' }) })
-    if (fqdn)  items.push({ icon: 'X', label: `Suppress FQDN: ${fqdn}`, onClick: () => setSuppressDialog({ row, valueType: 'fqdn' }) })
-    items.push('divider')
-    items.push({ icon: 'F', label: `Filter by ${srcIP}`, onClick: () => setGlobalFilter(srcIP) })
-    setContextMenu({ x: e.clientX, y: e.clientY, items })
-  }
-
-  const filterRows = (rows) => {
-    if (!globalFilter || !rows) return rows
-    return rows.filter(row =>
-      formatIP(row.src).includes(globalFilter) ||
-      formatIP(row.dst).includes(globalFilter) ||
-      (row.fqdn || '').includes(globalFilter)
-    )
   }
 
   const counts = data?.counts || {}
@@ -418,20 +487,7 @@ export default function Dashboard() {
       </div>
 
       <FilterBar />
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
-        <input
-          placeholder="Search IP or FQDN..."
-          value={globalFilter}
-          onChange={e => setGlobalFilter(e.target.value)}
-          style={{ background: '#1a1d27', border: '1px solid #2d3148', color: '#e2e8f0', padding: '0.4rem 0.75rem', borderRadius: 6, width: 280, fontSize: 13 }}
-        />
-        {globalFilter && (
-          <button onClick={() => setGlobalFilter('')} style={{ background: '#2d3148', border: 'none', color: '#94a3b8', borderRadius: 6, padding: '0.4rem 0.75rem', cursor: 'pointer', fontSize: 12 }}>
-            Clear
-          </button>
-        )}
-      </div>
+      <ChipBar chips={chips} setChips={setChips} andMode={andMode} setAndMode={setAndMode} />
 
       {error && <div style={{ color: '#ef4444', marginBottom: '1rem' }}>{error}</div>}
       {loading && <div style={{ color: '#7c85f5' }}>Loading...</div>}
@@ -451,29 +507,29 @@ export default function Dashboard() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <TopTable
                 title="Top Beaconing Threats"
-                rows={filterRows(data.top_beacons)}
+                rows={applyChips(data.top_beacons || [], chips, andMode)}
                 scoreKey="beacon_threat_score"
                 color="#7c85f5"
-                onIPClick={ip => handleIPClick(ip)}
-                onRowContextMenu={handleRowContextMenu}
+                onCellClick={addChip}
+                onSuppress={(row, vt) => setSuppressDialog({ row, valueType: vt })}
                 extraCols={[{ label: 'Duration', render: row => formatDur(row.total_duration) }]}
               />
               <TopTable
                 title="Top Threat Intel Hits"
-                rows={filterRows(data.top_threat_intel)}
+                rows={applyChips(data.top_threat_intel || [], chips, andMode)}
                 scoreKey="threat_intel_score"
                 color="#ef4444"
-                onIPClick={ip => handleIPClick(ip)}
-                onRowContextMenu={handleRowContextMenu}
+                onCellClick={addChip}
+                onSuppress={(row, vt) => setSuppressDialog({ row, valueType: vt })}
                 extraCols={[{ label: 'Feed', render: row => row.modifier_name || '—' }]}
               />
               <TopTable
                 title="Top Long Connections"
-                rows={filterRows(data.top_long_conns)}
+                rows={applyChips(data.top_long_conns || [], chips, andMode)}
                 scoreKey="long_conn_score"
                 color="#38bdf8"
-                onIPClick={ip => handleIPClick(ip)}
-                onRowContextMenu={handleRowContextMenu}
+                onCellClick={addChip}
+                onSuppress={(row, vt) => setSuppressDialog({ row, valueType: vt })}
                 extraCols={[
                   { label: 'Duration',    render: row => formatDur(row.total_duration) },
                   { label: 'Total Bytes', render: row => formatByt(row.total_bytes) },
@@ -483,13 +539,8 @@ export default function Dashboard() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {globalFilter && (
-                <div style={{ background: '#1e2235', border: '1px solid #2d3148', borderRadius: 6, padding: '0.5rem 0.75rem', fontSize: 12, color: '#64748b' }}>
-                  Charts show dataset totals — IP filter applies to tables only
-                </div>
-              )}
               {chartjsLoaded && chartData && <TrendChart data={chartData.trend} onApplyRange={handleApplyRange} />}
-              {chartjsLoaded && chartData && <DistChart data={chartData.distribution} />}
+              {chartData && <DistChart data={chartData.distribution} selectedBands={selectedBands} onBandClick={handleBandClick} />}
               {!chartjsLoaded && <div style={{ color: '#475569', fontSize: 13 }}>Loading charts...</div>}
             </div>
           </div>

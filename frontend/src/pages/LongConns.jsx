@@ -69,7 +69,10 @@ export default function LongConns() {
       <ChipBar chips={chips} setChips={setChips} andMode={andMode} setAndMode={setAndMode} />
       {error && <div style={{ color: '#ef4444', marginBottom: '1rem' }}>{error}</div>}
       {loading && <div style={{ color: '#7c85f5' }}>Loading...</div>}
-      {!loading && <DataTable data={filteredData} columns={columns} onRefresh={() => setRefreshKey(k => k + 1)} defaultSort={[{ id: 'long_conn_score', desc: true }]} onCellClick={addChip} />}
+      {!loading && data.length === 0 && !error && (
+        <div style={{ color: '#475569', padding: '2rem', textAlign: 'center' }}>No data available for this dataset.</div>
+      )}
+      {!loading && data.length > 0 && <DataTable data={filteredData} columns={columns} onRefresh={() => setRefreshKey(k => k + 1)} defaultSort={[{ id: 'long_conn_score', desc: true }]} onCellClick={addChip} />}
     </div>
   )
 }

@@ -20,11 +20,14 @@ def list_datasets():
 def last_seen(dataset: str = Query(...)):
     """Return the most recent last_seen and analyzed_at timestamps for a dataset."""
     client = get_client()
-    r = client.query(f"""
-        SELECT max(last_seen), max(analyzed_at)
-        FROM `{dataset}`.threat_mixtape
-    """)
-    row = r.result_rows[0] if r.result_rows else (None, None)
+    try:
+        r = client.query(f"""
+            SELECT max(last_seen), max(analyzed_at)
+            FROM `{dataset}`.threat_mixtape
+        """)
+        row = r.result_rows[0] if r.result_rows else (None, None)
+    except Exception:
+        row = (None, None)
     return {
         "last_seen":   str(row[0]) if row[0] else None,
         "analyzed_at": str(row[1]) if row[1] else None,

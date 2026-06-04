@@ -11,6 +11,7 @@ def get_threatintel(
     dataset: str = Query(...),
     limit: int = Query(500, le=2000),
     min_score: float = Query(0.0),
+    max_score: Optional[float] = Query(None),
     since_hours: Optional[int] = Query(None),
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
@@ -26,6 +27,7 @@ def get_threatintel(
     conditions = ["threat_intel = true", f"threat_intel_score >= {min_score}"]
     if beacon_type: conditions.append(f"beacon_type = '{beacon_type}'")
     if protocol: conditions.append(f"has(port_proto_service, '{protocol}')")
+    if max_score is not None: conditions.append(f"beacon_threat_score <= {max_score}")
     where = " AND ".join(conditions) + f" {time_cond} {supp_cond}"
 
     query = f"""
@@ -45,7 +47,10 @@ def get_threatintel(
             LIMIT {limit}
         )
     """
-    result = client.query(query)
+    try:
+        result = client.query(query)
+    except Exception:
+        return {"dataset": dataset, "count": 0, "results": []}
     rows = [dict(zip(result.column_names, row)) for row in result.result_rows]
     if show_suppressed:
         suppressed = get_suppressed_values(dataset)

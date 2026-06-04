@@ -13,6 +13,7 @@ def get_dashboard(
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
     min_score: float = Query(0.0),
+    max_score: Optional[float] = Query(None),
     beacon_type: Optional[str] = Query(None),
     threat_intel_only: bool = Query(False),
     protocol: Optional[str] = Query(None),
@@ -70,18 +71,28 @@ def get_dashboard(
         return {"latest": str(row[0]) if row[0] else None, "earliest": str(row[1]) if row[1] else None}
 
     ms = min_score
-    return {
+    ceiling = f" AND beacon_threat_score <= {max_score}" if max_score is not None else ""
+    empty = {
         "dataset": dataset,
-        "counts": {
-            "beaconing":    count(f"beacon_threat_score >= {ms}"),
-            "long_conns":   count(f"long_conn_score >= {ms} AND long_conn_score > 0"),
-            "dns":          count(f"c2_over_dns_score >= {ms} AND c2_over_dns_score > 0"),
-            "threat_intel": count(f"threat_intel = true AND threat_intel_score >= {ms}"),
-            "strobe":       count(f"strobe_score >= {ms} AND strobe_score > 0"),
-            "ti_beaconing": count(f"threat_intel = true AND beacon_score >= {ms}"),
-        },
-        "top_beacons":      top("beacon_threat_score", f"beacon_threat_score >= {ms}"),
-        "top_threat_intel": top("threat_intel_score",  f"threat_intel = true AND threat_intel_score >= {ms}"),
-        "top_long_conns":   top("long_conn_score",     f"long_conn_score >= {ms} AND long_conn_score > 0"),
-        "timerange": timerange(),
+        "counts": {"beaconing": 0, "long_conns": 0, "dns": 0, "threat_intel": 0, "strobe": 0, "ti_beaconing": 0},
+        "top_beacons": [], "top_threat_intel": [], "top_long_conns": [],
+        "timerange": {"latest": None, "earliest": None},
     }
+    try:
+        return {
+            "dataset": dataset,
+            "counts": {
+                "beaconing":    count(f"beacon_threat_score >= {ms}{ceiling}"),
+                "long_conns":   count(f"long_conn_score >= {ms} AND long_conn_score > 0{ceiling}"),
+                "dns":          count(f"c2_over_dns_score >= {ms} AND c2_over_dns_score > 0{ceiling}"),
+                "threat_intel": count(f"threat_intel = true AND threat_intel_score >= {ms}{ceiling}"),
+                "strobe":       count(f"strobe_score >= {ms} AND strobe_score > 0{ceiling}"),
+                "ti_beaconing": count(f"threat_intel = true AND beacon_score >= {ms}{ceiling}"),
+            },
+            "top_beacons":      top("beacon_threat_score", f"beacon_threat_score >= {ms}{ceiling}"),
+            "top_threat_intel": top("threat_intel_score",  f"threat_intel = true AND threat_intel_score >= {ms}{ceiling}"),
+            "top_long_conns":   top("long_conn_score",     f"long_conn_score >= {ms} AND long_conn_score > 0{ceiling}"),
+            "timerange": timerange(),
+        }
+    except Exception:
+        return empty

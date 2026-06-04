@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
+import { useLocation } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '../AuthContext'
 import { useDataset } from '../DatasetContext'
@@ -6,134 +7,7 @@ import { useFilters } from '../FiltersContext'
 import DataTable, { ScoreBadge } from '../components/DataTable'
 import FilterBar from '../components/FilterBar'
 import { formatIP, formatBytes, formatDuration } from '../utils'
-
-// ── Score / category filter constants ────────────────────────────────────────
-const SCORE_RE    = /^(threat|beacon|longconn|dns|strobe|intel)(>=|<=|>|<|=)(\d{1,3})$/i
-const CATEGORY_RE = /^(threat|beacon|longconn|dns|strobe|intel)$/i
-const SCORE_KEYWORDS = ['threat', 'beacon', 'longconn', 'dns', 'strobe', 'intel']
-
-// Colors match the CategoryBadge tag colors so the chip visually maps to the tag
-const CATEGORY_COLORS = {
-  beacon:   '#7c85f5',
-  longconn: '#38bdf8',
-  dns:      '#a78bfa',
-  intel:    '#f87171',  // lighter red to distinguish from NOT chips
-  strobe:   '#f97316',
-  threat:   '#94a3b8',
-}
-
-function detectChipType(value) {
-  if (CATEGORY_RE.test(value)) return 'category'
-  if (SCORE_RE.test(value))    return 'score'
-  return 'target'
-}
-
-// ── Chip input ──────────────────────────────────────────────────────────────
-function ChipInput({ chips, onChange }) {
-  const [input, setInput] = useState('')
-  const inputRef = useRef(null)
-
-  const parseRaw = (raw) => {
-    const val = raw.trim()
-    if (!val) return null
-
-    // Detect NOT prefix: "!expr" or "NOT expr" (case-insensitive)
-    let negate = false
-    let core = val
-    const notMatch = val.match(/^(!|NOT\s+)(.+)$/i)
-    if (notMatch) {
-      negate = true
-      core = notMatch[2].trim()
-    }
-
-    // Detect bare category keyword (e.g. "beacon", "intel") — must precede score check
-    if (CATEGORY_RE.test(core)) {
-      return { value: core.toLowerCase(), negate, type: 'category' }
-    }
-
-    // Detect score filter: keyword op value (e.g. beacon>50)
-    const scoreMatch = core.match(SCORE_RE)
-    if (scoreMatch) {
-      const num = parseInt(scoreMatch[3], 10)
-      if (num < 0 || num > 100) return null  // out of range — reject silently
-      return { value: core.toLowerCase(), negate, type: 'score' }
-    }
-
-    return { value: core, negate, type: 'target' }
-  }
-
-  const add = (raw) => {
-    const chip = parseRaw(raw)
-    if (!chip) return
-    if (chips.some(c => c.value === chip.value)) return
-    onChange([...chips, chip])
-    setInput('')
-  }
-
-  const remove = (val) => onChange(chips.filter(c => c.value !== val))
-
-  const handleKey = (e) => {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault()
-      add(input)
-    } else if (e.key === ' ' && !input.match(/^not$/i)) {
-      e.preventDefault()
-      add(input)
-    } else if (e.key === 'Backspace' && !input && chips.length) {
-      remove(chips[chips.length - 1].value)
-    }
-  }
-
-  return (
-    <div
-      onClick={() => inputRef.current?.focus()}
-      style={{
-        display: 'flex', flexWrap: 'wrap', gap: '0.4rem',
-        alignItems: 'center', minHeight: 42,
-        background: '#0f1117', border: '1px solid #2d3148',
-        borderRadius: 8, padding: '0.4rem 0.75rem', cursor: 'text',
-      }}
-    >
-      {chips.map(chip => {
-        const isNeg      = chip.negate
-        const isScore    = chip.type === 'score'
-        const isCategory = chip.type === 'category'
-        const baseColor  = isNeg      ? '#ef4444'
-                         : isCategory ? (CATEGORY_COLORS[chip.value] || '#22c55e')
-                         : isScore    ? '#eab308'
-                         : '#7c85f5'
-        const chipBg  = baseColor + '22'
-        const chipBdr = baseColor + '55'
-        return (
-          <span key={chip.value} style={{
-            display: 'inline-flex', alignItems: 'center', gap: 4,
-            background: chipBg, border: `1px solid ${chipBdr}`,
-            color: baseColor, borderRadius: 4, padding: '2px 8px', fontSize: 13, fontWeight: 600,
-          }}>
-            {isNeg && <span style={{ fontSize: 11, opacity: 0.85, marginRight: 2 }}>NOT</span>}
-            {chip.value}
-            <button onClick={() => remove(chip.value)} style={{
-              background: 'none', border: 'none', color: baseColor,
-              cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0, opacity: 0.7,
-            }}>✕</button>
-          </span>
-        )
-      })}
-      <input
-        ref={inputRef}
-        value={input}
-        onChange={e => setInput(e.target.value)}
-        onKeyDown={handleKey}
-        onBlur={() => input && add(input)}
-        placeholder={chips.length ? '' : 'IP, CIDR, FQDN, or score filter (e.g. beacon>50, threat>=75)...'}
-        style={{
-          flex: 1, minWidth: 200, background: 'none', border: 'none',
-          color: '#e2e8f0', fontSize: 13, outline: 'none',
-        }}
-      />
-    </div>
-  )
-}
+import ChipBar, { detectChipType } from '../components/ChipBar'
 
 // ── Summary cards ────────────────────────────────────────────────────────────
 function SummaryCards({ summary }) {
@@ -336,7 +210,7 @@ function CategoryBadge({ row }) {
   const cats = []
   if ((row.beacon_score || 0) > 0)        cats.push({ label: 'Beacon', color: '#7c85f5' })
   if ((row.long_conn_score || 0) > 0)     cats.push({ label: 'Long',   color: '#38bdf8' })
-  if ((row.c2_over_dns_score || 0) > 0)   cats.push({ label: 'DNS',    color: '#a78bfa' })
+  if ((row.c2_over_dns_score || 0) > 0)   cats.push({ label: row.subdomain_count > 0 ? `DNS • ${row.subdomain_count}` : 'DNS', color: '#a78bfa' })
   if (row.threat_intel)                   cats.push({ label: 'TI',     color: '#ef4444' })
   if ((row.strobe_score || 0) > 0)        cats.push({ label: 'Strobe', color: '#f97316' })
   return (
@@ -352,14 +226,21 @@ function CategoryBadge({ row }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function Investigate() {
+  const location = useLocation()
   const { authHeader } = useAuth()
   const { datasets, setDatasets, dataset, setDataset } = useDataset()
-  const { dateRangeHours, setDateRangeHours, customDateFrom, setCustomDateFrom, customDateTo, setCustomDateTo, minScore, beaconType, threatIntelOnly, protocol, showSuppressed, globalFilter, setGlobalFilter } = useFilters()
+  const { dateRangeHours, setDateRangeHours, customDateFrom, setCustomDateFrom, customDateTo, setCustomDateTo, minScore, setMinScore, maxScore, beaconType, threatIntelOnly, protocol, showSuppressed, globalFilter, setGlobalFilter } = useFilters()
   const auth = { headers: authHeader }
+
+  const pivotValue = location.state?.pivot ?? null
 
   const [andMode, setAndMode] = useState(() => { try { return JSON.parse(localStorage.getItem('rita_investigate_and') || 'false') } catch { return false } })
   const setAndModeP = (v) => { try { localStorage.setItem('rita_investigate_and', JSON.stringify(v)) } catch {}; setAndMode(v) }
   const [chips, setChipsState] = useState(() => {
+    // If arriving via pivot, start with that value and ignore saved chips
+    if (pivotValue) {
+      return [{ value: pivotValue, negate: false, type: detectChipType(pivotValue) }]
+    }
     try {
       const stored = JSON.parse(localStorage.getItem('rita_investigate_chips') || '[]')
       return stored.map(c => {
@@ -376,6 +257,16 @@ export default function Investigate() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+
+  // On pivot arrival: persist chip to localStorage, reset min score, clear nav state
+  useEffect(() => {
+    if (pivotValue) {
+      const pivotChip = { value: pivotValue, negate: false, type: detectChipType(pivotValue) }
+      try { localStorage.setItem('rita_investigate_chips', JSON.stringify([pivotChip])) } catch {}
+      setMinScore(0)
+      window.history.replaceState({}, document.title)
+    }
+  }, [])
 
   // Auto-run on mount when dataset is available
   useEffect(() => {
@@ -414,6 +305,7 @@ export default function Investigate() {
       date_from: dateRangeHours === 'custom' ? customDateFrom || undefined : undefined,
       date_to: dateRangeHours === 'custom' ? customDateTo || undefined : undefined,
       min_score: minScore || undefined,
+      max_score: (maxScore !== null && maxScore < 1) ? maxScore : undefined,
       beacon_type: beaconType || undefined,
       threat_intel_only: threatIntelOnly === true ? true : undefined,
       protocol: protocol || undefined,
@@ -429,7 +321,7 @@ export default function Investigate() {
     if (data !== null) {
       run()
     }
-  }, [chips, andMode, dateRangeHours, customDateFrom, customDateTo, minScore, beaconType, threatIntelOnly, protocol, showSuppressed, dataset])
+  }, [chips, andMode, dateRangeHours, customDateFrom, customDateTo, minScore, maxScore, beaconType, threatIntelOnly, protocol, showSuppressed, dataset])
 
   const handleApplyRange = (minDay, maxDay) => {
     setDateRangeHours('custom')
@@ -464,65 +356,21 @@ export default function Investigate() {
 
       <FilterBar />
 
-      {/* Search box */}
-      <div style={{ background: '#1a1d27', border: '1px solid #2d3148', borderRadius: 8, padding: '1rem', marginBottom: '1.25rem' }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
-          Targets — IPs, CIDRs, or FQDNs
-        </div>
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
-              <span style={{ fontSize: 11, color: '#475569' }}>Match mode:</span>
-              <button
-                onClick={() => setAndModeP(false)}
-                style={{
-                  background: !andMode ? '#7c85f522' : 'none',
-                  border: `1px solid ${!andMode ? '#7c85f5' : '#2d3148'}`,
-                  color: !andMode ? '#7c85f5' : '#475569',
-                  borderRadius: 4, padding: '1px 8px', cursor: 'pointer', fontSize: 11, fontWeight: !andMode ? 700 : 400,
-                }}
-              >OR</button>
-              <button
-                onClick={() => setAndModeP(true)}
-                style={{
-                  background: andMode ? '#eab30822' : 'none',
-                  border: `1px solid ${andMode ? '#eab308' : '#2d3148'}`,
-                  color: andMode ? '#eab308' : '#475569',
-                  borderRadius: 4, padding: '1px 8px', cursor: 'pointer', fontSize: 11, fontWeight: andMode ? 700 : 400,
-                }}
-              >AND</button>
-              {andMode && chips.length > 1 && (
-                <span style={{ fontSize: 11, color: '#eab308' }}>showing rows containing ALL targets</span>
-              )}
-            </div>
-            <ChipInput chips={chips} onChange={setChips} />
-            <div style={{ fontSize: 11, color: '#475569', marginTop: '0.4rem' }}>
-              Press Enter, comma, or space to add. IPs, CIDRs, FQDNs, or score filters: {SCORE_KEYWORDS.join(', ')} with operators &gt; &lt; &gt;= &lt;= = and value 0–100. Prefix any chip with ! or NOT to exclude.
-            </div>
-          </div>
-          <button
-            onClick={run}
-            disabled={loading}
-            style={{
-              background: '#7c85f5',
-              border: 'none', color: '#fff',
-              borderRadius: 8, padding: '0.6rem 1.5rem',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap',
-              opacity: loading ? 0.7 : 1,
-            }}
-          >
-            {loading ? 'Investigating...' : 'Investigate'}
-          </button>
-          {chips.length > 0 && (
-            <button
-              onClick={() => { setChips([]) }}
-              style={{ background: 'none', border: '1px solid #2d3148', color: '#475569', borderRadius: 8, padding: '0.6rem 1rem', cursor: 'pointer', fontSize: 13 }}
-            >
-              Clear
-            </button>
-          )}
-        </div>
+      <ChipBar chips={chips} setChips={setChips} andMode={andMode} setAndMode={setAndModeP} />
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+        <button
+          onClick={run}
+          disabled={loading}
+          style={{
+            background: '#7c85f5', border: 'none', color: '#fff',
+            borderRadius: 6, padding: '0.4rem 1.25rem',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap',
+            opacity: loading ? 0.7 : 1,
+          }}
+        >
+          {loading ? 'Investigating...' : 'Investigate'}
+        </button>
       </div>
 
       {error && <div style={{ color: '#ef4444', marginBottom: '1rem' }}>{error}</div>}
@@ -544,6 +392,7 @@ export default function Investigate() {
             columns={columns}
             defaultSort={[{ id: 'beacon_threat_score', desc: true }]}
             onCellClick={handleCellClick}
+            hideGlobalFilter
           />
         </>
       )}

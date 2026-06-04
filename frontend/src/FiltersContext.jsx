@@ -25,6 +25,7 @@ export function FiltersProvider({ children }) {
   const [customDateFrom,  setCustomDateFromState]   = useState(() => load('rita_date_from', ''))
   const [customDateTo,    setCustomDateToState]     = useState(() => load('rita_date_to', ''))
   const [minScore,        setMinScoreState]         = useState(() => load('rita_min_score', 0))
+  const [maxScore,        setMaxScoreState]         = useState(() => load('rita_max_score', 1))
   const [beaconType,      setBeaconTypeState]       = useState(() => load('rita_beacon_type', ''))
   const [threatIntelOnly, setThreatIntelOnlyState]  = useState(() => load('rita_ti_only', false))
   const [protocol,        setProtocolState]         = useState(() => load('rita_protocol', ''))
@@ -35,6 +36,7 @@ export function FiltersProvider({ children }) {
   const setCustomDateFrom  = v => { save('rita_date_from', v);     setCustomDateFromState(v) }
   const setCustomDateTo    = v => { save('rita_date_to', v);       setCustomDateToState(v) }
   const setMinScore        = v => { save('rita_min_score', v);     setMinScoreState(v) }
+  const setMaxScore        = v => { save('rita_max_score', v);     setMaxScoreState(v) }
   const setBeaconType      = v => { save('rita_beacon_type', v);   setBeaconTypeState(v) }
   const setThreatIntelOnly = v => { save('rita_ti_only', v);       setThreatIntelOnlyState(v) }
   const setProtocol        = v => { save('rita_protocol', v);      setProtocolState(v) }
@@ -47,6 +49,7 @@ export function FiltersProvider({ children }) {
       customDateFrom,  setCustomDateFrom,
       customDateTo,    setCustomDateTo,
       minScore,        setMinScore,
+      maxScore,        setMaxScore,
       beaconType,      setBeaconType,
       threatIntelOnly, setThreatIntelOnly,
       protocol,        setProtocol,

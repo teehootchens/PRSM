@@ -45,6 +45,61 @@ export function ipInCIDR(ip, cidr) {
   return (ipNum & parsed.mask) === parsed.network
 }
 
+// ── Client-side chip filtering ───────────────────────────────────────────────
+const _SCORE_COL = {
+  threat: 'beacon_threat_score', beacon: 'beacon_score',
+  longconn: 'long_conn_score',   dns: 'c2_over_dns_score',
+  strobe: 'strobe_score',        intel: 'threat_intel_score',
+}
+const _SCORE_RE = /^(threat|beacon|longconn|dns|strobe|intel)(>=|<=|>|<|=)(\d{1,3})$/i
+const _CAT_MATCH = {
+  beacon:   r => (r.beacon_score || 0) > 0,
+  intel:    r => r.threat_intel === true,
+  longconn: r => (r.long_conn_score || 0) > 0,
+  dns:      r => (r.c2_over_dns_score || 0) > 0,
+  strobe:   r => (r.strobe_score || 0) > 0,
+  threat:   r => (r.beacon_threat_score || 0) > 0,
+}
+
+export function matchesChip(row, chip) {
+  if (chip.type === 'score') {
+    const m = chip.value.match(_SCORE_RE)
+    if (!m) return false
+    const col = _SCORE_COL[m[1].toLowerCase()]
+    const op = m[2], val = parseInt(m[3], 10)
+    const rv = Math.round((row[col] || 0) * 100)
+    if (op === '>')  return rv >  val
+    if (op === '<')  return rv <  val
+    if (op === '>=') return rv >= val
+    if (op === '<=') return rv <= val
+    if (op === '=')  return rv === val
+    return false
+  }
+  if (chip.type === 'category') {
+    const fn = _CAT_MATCH[chip.value]
+    return fn ? fn(row) : false
+  }
+  // IP / FQDN target
+  const src  = formatIP(row.src  || '')
+  const dst  = formatIP(row.dst  || '')
+  const fqdn = row.fqdn || ''
+  const v = chip.value
+  if (v.includes('/')) return ipInCIDR(src, v) || ipInCIDR(dst, v)
+  if (v.includes('*')) return matchesFilter(src, v) || matchesFilter(dst, v) || matchesFilter(fqdn, v)
+  return src === v || dst === v || fqdn.toLowerCase().includes(v.toLowerCase())
+}
+
+export function applyChips(rows, chips, andMode) {
+  if (!chips || chips.length === 0) return rows
+  const pos = chips.filter(c => !c.negate)
+  const neg = chips.filter(c =>  c.negate)
+  return rows.filter(row => {
+    if (neg.some(c => matchesChip(row, c))) return false
+    if (pos.length === 0) return true
+    return andMode ? pos.every(c => matchesChip(row, c)) : pos.some(c => matchesChip(row, c))
+  })
+}
+
 // Returns true if filter matches the value (supports CIDR)
 export function matchesFilter(value, filter) {
   if (!filter || !value) return false

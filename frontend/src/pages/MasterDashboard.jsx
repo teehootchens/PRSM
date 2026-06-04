@@ -126,22 +126,32 @@ function DatasetCard({ ds, onClick }) {
 
 export default function MasterDashboard() {
   const { authHeader } = useAuth()
-  const { setDataset } = useDataset()
+  const { setDataset, setDatasets: setContextDatasets } = useDataset()
   const navigate = useNavigate()
-  const [datasets, setDatasets] = useState([])
+  const [summaries, setSummaries] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [pendingNav, setPendingNav] = useState(false)
 
   useEffect(() => {
     axios.get('/api/datasets/summary', { headers: authHeader })
-      .then(r => setDatasets(r.data.datasets))
+      .then(r => {
+        setSummaries(r.data.datasets)
+        setContextDatasets(r.data.datasets.map(d => d.dataset))
+      })
       .catch(() => setError('Failed to load datasets'))
       .finally(() => setLoading(false))
   }, [])
 
+  // Navigate only after state has committed
+  useEffect(() => {
+    if (pendingNav) navigate('/dashboard')
+  }, [pendingNav])
+
   const handleSelect = (ds) => {
     setDataset(ds.dataset)
-    navigate('/dashboard')
+    setContextDatasets(summaries.map(d => d.dataset))
+    setPendingNav(true)
   }
 
   return (
@@ -167,17 +177,17 @@ export default function MasterDashboard() {
           <div style={{ color: '#7c85f5', textAlign: 'center' }}>Loading datasets…</div>
         )}
 
-        {!loading && !error && datasets.length === 0 && (
+        {!loading && !error && summaries.length === 0 && (
           <div style={{ color: '#475569', textAlign: 'center' }}>No datasets found.</div>
         )}
 
-        {!loading && datasets.length > 0 && (
+        {!loading && summaries.length > 0 && (
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
             gap: '1rem',
           }}>
-            {datasets.map(ds => (
+            {summaries.map(ds => (
               <DatasetCard key={ds.dataset} ds={ds} onClick={() => handleSelect(ds)} />
             ))}
           </div>

@@ -5,17 +5,21 @@ import { useDataset } from '../DatasetContext'
 import { useFilters } from '../FiltersContext'
 import DataTable, { ScoreBadge } from '../components/DataTable'
 import FilterBar from '../components/FilterBar'
-import { formatIP } from '../utils'
+import ChipBar from '../components/ChipBar'
+import { usePageChips } from '../hooks/usePageChips'
+import { formatIP, applyChips } from '../utils'
 
 export default function Beaconing() {
   const { authHeader } = useAuth()
   const { datasets, setDatasets, dataset, setDataset } = useDataset()
-  const { dateRangeHours, customDateFrom, customDateTo, minScore, beaconType, threatIntelOnly, protocol, showSuppressed } = useFilters()
+  const { dateRangeHours, customDateFrom, customDateTo, minScore, maxScore, beaconType, threatIntelOnly, protocol, showSuppressed } = useFilters()
   const auth = { headers: authHeader }
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
+
+  const { chips, setChips, addChip, andMode, setAndMode } = usePageChips('beaconing_chips')
 
   useEffect(() => {
     if (datasets.length) return
@@ -30,6 +34,7 @@ export default function Beaconing() {
     axios.get('/api/beaconing', { ...auth, params: {
       dataset, limit: 1000,
       min_score: minScore,
+      max_score: maxScore < 1 ? maxScore : undefined,
       since_hours: (dateRangeHours && dateRangeHours !== 'custom') ? dateRangeHours : undefined,
       date_from: dateRangeHours === 'custom' ? customDateFrom || undefined : undefined,
       date_to: dateRangeHours === 'custom' ? customDateTo || undefined : undefined,
@@ -41,7 +46,9 @@ export default function Beaconing() {
       .then(r => setData(r.data.results))
       .catch(() => setError('Failed to load beaconing data'))
       .finally(() => setLoading(false))
-  }, [dataset, minScore, dateRangeHours, customDateFrom, customDateTo, beaconType, threatIntelOnly, protocol, showSuppressed, refreshKey])
+  }, [dataset, minScore, maxScore, dateRangeHours, customDateFrom, customDateTo, beaconType, threatIntelOnly, protocol, showSuppressed, refreshKey])
+
+  const filteredData = useMemo(() => applyChips(data, chips, andMode), [data, chips, andMode])
 
   const columns = useMemo(() => [
     { accessorKey: 'beacon_threat_score', header: 'Threat Score', cell: ({ getValue }) => <ScoreBadge value={getValue()} /> },
@@ -59,9 +66,21 @@ export default function Beaconing() {
     <div>
       <h1 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#7c85f5', marginBottom: '1rem' }}>Beaconing</h1>
       <FilterBar />
+      <ChipBar chips={chips} setChips={setChips} andMode={andMode} setAndMode={setAndMode} />
       {error && <div style={{ color: '#ef4444', marginBottom: '1rem' }}>{error}</div>}
       {loading && <div style={{ color: '#7c85f5' }}>Loading...</div>}
-      {!loading && <DataTable data={data} columns={columns} onRefresh={() => setRefreshKey(k => k + 1)} defaultSort={[{ id: 'beacon_threat_score', desc: true }]} />}
+      {!loading && data.length === 0 && !error && (
+        <div style={{ color: '#475569', padding: '2rem', textAlign: 'center' }}>No data available for this dataset.</div>
+      )}
+      {!loading && data.length > 0 && (
+        <DataTable
+          data={filteredData}
+          columns={columns}
+          onRefresh={() => setRefreshKey(k => k + 1)}
+          defaultSort={[{ id: 'beacon_threat_score', desc: true }]}
+          onCellClick={addChip}
+        />
+      )}
     </div>
   )
 }

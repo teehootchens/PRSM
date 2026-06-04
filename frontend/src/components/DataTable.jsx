@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   useReactTable, getCoreRowModel, getSortedRowModel,
   getFilteredRowModel, flexRender,
@@ -47,7 +48,8 @@ const TH_STYLE = {
 
 const CLICKABLE = ['src', 'dst', 'fqdn']
 
-export default function DataTable({ data, columns, defaultSort, onRefresh, onCellClick }) {
+export default function DataTable({ data, columns, defaultSort, onRefresh, onCellClick, hideGlobalFilter }) {
+  const navigate = useNavigate()
   const [sorting, setSorting] = useState(defaultSort || [])
   const { globalFilter, setGlobalFilter } = useFilters()
   const [expanded, setExpanded] = useState({})
@@ -128,61 +130,47 @@ export default function DataTable({ data, columns, defaultSort, onRefresh, onCel
     setSelectedRow(rowData)
   }
 
-  const handleContextMenu = useCallback((e, rowData) => {
+  // Right-click on a src/dst/fqdn value span — rich field-aware menu
+  const handleValueContextMenu = useCallback((e, rowData, colId, value) => {
     e.preventDefault()
     e.stopPropagation()
-
-    const srcIP = formatIP(rowData.src)
-    const dstIP = formatIP(rowData.dst)
-    const fqdn  = rowData.fqdn
-
-    const items = []
-
-    if (srcIP) {
-      items.push({
+    const valueTypeMap = { src: 'src', dst: 'dst', fqdn: 'fqdn' }
+    const valueType = valueTypeMap[colId]
+    const items = [
+      {
         icon: '🚫',
-        label: `Suppress src: ${srcIP}`,
-        onClick: () => setSuppressDialog({ row: rowData, valueType: 'src' }),
-      })
-    }
-    if (dstIP) {
-      items.push({
-        icon: '🚫',
-        label: `Suppress dst: ${dstIP}`,
-        onClick: () => setSuppressDialog({ row: rowData, valueType: 'dst' }),
-      })
-    }
-    if (fqdn) {
-      items.push({
-        icon: '🚫',
-        label: `Suppress FQDN: ${fqdn}`,
-        onClick: () => setSuppressDialog({ row: rowData, valueType: 'fqdn' }),
-      })
-    }
-
-    items.push('divider')
-    if (onCellClick) {
-      // On Investigate page — left-click adds to targets, right-click offers global filter
-      items.push({
+        label: `Suppress: ${value}`,
+        onClick: () => setSuppressDialog({ row: rowData, valueType }),
+      },
+      {
         icon: '🔍',
-        label: srcIP ? `Add to global filter: ${srcIP}` : 'Add to global filter',
-        onClick: () => setGlobalFilter(srcIP),
-      })
-    } else {
-      items.push({
-        icon: '🔍',
-        label: srcIP ? `Filter by ${srcIP}` : 'Filter',
-        onClick: () => setGlobalFilter(srcIP),
-      })
-    }
-    items.push({
-      icon: '📋',
-      label: 'View details',
-      onClick: () => setSelectedRow(rowData),
+        label: `Add to global filter: ${value}`,
+        onClick: () => setGlobalFilter(value),
+      },
+      {
+        icon: '🔎',
+        label: `Pivot to Investigate: ${value}`,
+        onClick: () => navigate('/investigate', { state: { pivot: value } }),
+      },
+      'divider',
+      {
+        icon: '📋',
+        label: 'View Details',
+        onClick: () => setSelectedRow(rowData),
+      },
+    ]
+    setContextMenu({ x: e.clientX, y: e.clientY, items })
+  }, [setGlobalFilter, navigate])
+
+  // Right-click anywhere else on the row — view details only
+  const handleRowContextMenu = useCallback((e, rowData) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setContextMenu({
+      x: e.clientX, y: e.clientY,
+      items: [{ icon: '📋', label: 'View Details', onClick: () => setSelectedRow(rowData) }],
     })
-
-    setContextMenu({ x: e.clientX, y: e.clientY, items, row: rowData })
-  }, [setGlobalFilter])
+  }, [])
 
   const toggleExpand = (e, key) => {
     e.stopPropagation()
@@ -203,22 +191,26 @@ export default function DataTable({ data, columns, defaultSort, onRefresh, onCel
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-        <input
-          placeholder="Filter... (or click a src/dst/fqdn)"
-          value={globalFilter}
-          onChange={e => setGlobalFilter(e.target.value)}
-          style={{
-            background: '#1a1d27', border: '1px solid #2d3148', color: '#e2e8f0',
-            padding: '0.4rem 0.75rem', borderRadius: 6, width: 280,
-          }}
-        />
-        {globalFilter && (
-          <button onClick={() => setGlobalFilter('')} style={{
-            background: '#2d3148', border: 'none', color: '#94a3b8',
-            borderRadius: 6, padding: '0.4rem 0.75rem', cursor: 'pointer', fontSize: 12,
-          }}>
-            Clear
-          </button>
+        {!hideGlobalFilter && (
+          <>
+            <input
+              placeholder="Filter... (or click a src/dst/fqdn)"
+              value={globalFilter}
+              onChange={e => setGlobalFilter(e.target.value)}
+              style={{
+                background: '#1a1d27', border: '1px solid #2d3148', color: '#e2e8f0',
+                padding: '0.4rem 0.75rem', borderRadius: 6, width: 280,
+              }}
+            />
+            {globalFilter && (
+              <button onClick={() => setGlobalFilter('')} style={{
+                background: '#2d3148', border: 'none', color: '#94a3b8',
+                borderRadius: 6, padding: '0.4rem 0.75rem', cursor: 'pointer', fontSize: 12,
+              }}>
+                Clear
+              </button>
+            )}
+          </>
         )}
         <span style={{ color: '#475569', marginLeft: 'auto', fontSize: 13 }}>
           {visibleRows.length > 0
@@ -240,6 +232,7 @@ export default function DataTable({ data, columns, defaultSort, onRefresh, onCel
                     {{ asc: ' ↑', desc: ' ↓' }[header.column.getIsSorted()] ?? ' ↕'}
                   </th>
                 ))}
+                <th style={{ ...TH_STYLE, width: 32 }} />
               </tr>
             ))}
           </thead>
@@ -254,7 +247,7 @@ export default function DataTable({ data, columns, defaultSort, onRefresh, onCel
                 <tr
                   key={`row-${row.id}`}
                   onClick={() => handleRowClick(row.original)}
-                  onContextMenu={e => handleContextMenu(e, row.original)}
+                  onContextMenu={e => handleRowContextMenu(e, row.original)}
                   style={{
                     background: row.original.is_suppressed
                       ? 'rgba(239,68,68,0.07)'
@@ -262,8 +255,16 @@ export default function DataTable({ data, columns, defaultSort, onRefresh, onCel
                     cursor: 'pointer',
                     borderLeft: row.original.is_suppressed ? '3px solid #ef444466' : '3px solid transparent',
                   }}
-                  onMouseEnter={e => e.currentTarget.style.background = row.original.is_suppressed ? 'rgba(239,68,68,0.12)' : '#1a1d27'}
-                  onMouseLeave={e => e.currentTarget.style.background = row.original.is_suppressed ? 'rgba(239,68,68,0.07)' : i % 2 === 0 ? '#0f1117' : '#13161f'}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = row.original.is_suppressed ? 'rgba(239,68,68,0.12)' : '#1a1d27'
+                    const ch = e.currentTarget.querySelector('.row-chevron')
+                    if (ch) ch.style.color = '#94a3b8'
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = row.original.is_suppressed ? 'rgba(239,68,68,0.07)' : i % 2 === 0 ? '#0f1117' : '#13161f'
+                    const ch = e.currentTarget.querySelector('.row-chevron')
+                    if (ch) ch.style.color = '#334155'
+                  }}
                 >
                   <td
                     style={{ ...CELL_STYLE, width: 32, textAlign: 'center' }}
@@ -281,21 +282,40 @@ export default function DataTable({ data, columns, defaultSort, onRefresh, onCel
                     const colId = cell.column.id
                     const isClickable = CLICKABLE.includes(colId)
                     const rawVal = cell.getValue()
+                    const hasClickVal = isClickable && rawVal
+                    const rendered = flexRender(cell.column.columnDef.cell, cell.getContext())
                     return (
                       <td
                         key={cell.id}
-                        style={{
-                          ...CELL_STYLE,
-                          color: isClickable && rawVal ? '#93c5fd' : 'inherit',
-                          textDecoration: isClickable && rawVal ? 'underline dotted' : 'none',
-                        }}
-                        onClick={e => handleCellClick(e, colId, rawVal)}
-                        title={isClickable && rawVal ? `Filter by ${formatIP(rawVal)}` : 'Right-click for options'}
+                        style={CELL_STYLE}
+                        title={hasClickVal ? undefined : 'Right-click for options'}
                       >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        {hasClickVal ? (
+                          <span
+                            onClick={e => handleCellClick(e, colId, rawVal)}
+                            onContextMenu={e => handleValueContextMenu(e, row.original, colId, formatIP(rawVal))}
+                            onMouseEnter={e => { e.currentTarget.style.color = '#60a5fa' }}
+                            onMouseLeave={e => { e.currentTarget.style.color = '#93c5fd' }}
+                            style={{ color: '#93c5fd', textDecoration: 'underline dotted', cursor: 'pointer' }}
+                            title="Left-click to filter · Right-click for options"
+                          >
+                            {rendered}
+                          </span>
+                        ) : rendered}
                       </td>
                     )
                   })}
+                  <td style={{ ...CELL_STYLE, width: 32, textAlign: 'center', padding: '0.5rem 0.5rem' }}>
+                    <span
+                      className="row-chevron"
+                      style={{
+                        color: '#334155', fontSize: 14, display: 'inline-block', lineHeight: 1,
+                        transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.15s, color 0.15s',
+                        userSelect: 'none',
+                      }}
+                    >›</span>
+                  </td>
                 </tr>,
                 ...(isExpanded && hasChildren
                   ? group.children.map((childRow, ci) => (
@@ -303,9 +323,17 @@ export default function DataTable({ data, columns, defaultSort, onRefresh, onCel
                         key={`${key}-child-${ci}`}
                         style={{ background: '#0d1020', cursor: 'pointer' }}
                         onClick={() => handleRowClick(childRow)}
-                        onContextMenu={e => handleContextMenu(e, childRow)}
-                        onMouseEnter={e => e.currentTarget.style.background = '#1a1d27'}
-                        onMouseLeave={e => e.currentTarget.style.background = '#0d1020'}
+                        onContextMenu={e => handleRowContextMenu(e, childRow)}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.background = '#1a1d27'
+                          const ch = e.currentTarget.querySelector('.row-chevron')
+                          if (ch) ch.style.color = '#94a3b8'
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.background = '#0d1020'
+                          const ch = e.currentTarget.querySelector('.row-chevron')
+                          if (ch) ch.style.color = '#334155'
+                        }}
                       >
                         <td style={{ ...CELL_STYLE, width: 32 }} />
                         {columns.map(col => {
@@ -320,6 +348,12 @@ export default function DataTable({ data, columns, defaultSort, onRefresh, onCel
                             </td>
                           )
                         })}
+                        <td style={{ ...CELL_STYLE, width: 32, textAlign: 'center', padding: '0.5rem 0.5rem' }}>
+                          <span
+                            className="row-chevron"
+                            style={{ color: '#334155', fontSize: 14, lineHeight: 1, userSelect: 'none', transition: 'color 0.15s' }}
+                          >›</span>
+                        </td>
                       </tr>
                     ))
                   : []
