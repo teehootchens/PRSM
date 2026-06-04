@@ -1,8 +1,11 @@
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import axios from 'axios'
 import { AuthProvider, useAuth } from './AuthContext'
 import { DatasetProvider, useDataset } from './DatasetContext'
 import { FiltersProvider, useFilters } from './FiltersContext'
 import Dashboard from './pages/Dashboard.jsx'
+import MasterDashboard from './pages/MasterDashboard.jsx'
 import Beaconing from './pages/Beaconing.jsx'
 import LongConns from './pages/LongConns.jsx'
 import DNS from './pages/DNS.jsx'
@@ -11,6 +14,7 @@ import Strobe from './pages/Strobe.jsx'
 import Whitelist from './pages/Whitelist.jsx'
 import Investigate from './pages/Investigate.jsx'
 import Login from './pages/Login.jsx'
+import HelpPanel from './components/HelpPanel.jsx'
 import './App.css'
 import prsmLogo from './assets/prsm-logo.svg'
 
@@ -18,17 +22,25 @@ function DatasetPicker() {
   const { datasets, dataset, setDataset } = useDataset()
   if (!datasets.length) return null
   return (
-    <select
-      value={dataset}
-      onChange={e => setDataset(e.target.value)}
-      style={{
-        background: '#0f1117', border: '1px solid #2d3148', color: '#e2e8f0',
-        padding: '0.35rem 0.6rem', borderRadius: 6, fontSize: 12, width: '100%',
-        marginBottom: '0.5rem',
-      }}
-    >
-      {datasets.map(d => <option key={d} value={d}>{d}</option>)}
-    </select>
+    <div style={{ marginBottom: '0.5rem' }}>
+      <div style={{
+        fontSize: 10, color: '#475569', fontWeight: 600,
+        textTransform: 'uppercase', letterSpacing: '0.05em',
+        marginBottom: '0.25rem',
+      }}>
+        Dataset
+      </div>
+      <select
+        value={dataset}
+        onChange={e => setDataset(e.target.value)}
+        style={{
+          background: '#0f1117', border: '1px solid #2d3148', color: '#e2e8f0',
+          padding: '0.35rem 0.6rem', borderRadius: 6, fontSize: 12, width: '100%',
+        }}
+      >
+        {datasets.map(d => <option key={d} value={d}>{d}</option>)}
+      </select>
+    </div>
   )
 }
 
@@ -101,15 +113,61 @@ function ActiveFiltersBadge() {
   )
 }
 
+function relativeTime(dateStr) {
+  if (!dateStr) return null
+  const diff = (Date.now() - new Date(dateStr).getTime()) / 1000
+  if (diff < 60)     return 'just now'
+  if (diff < 3600)   return `${Math.floor(diff / 60)}m ago`
+  if (diff < 86400)  return `${Math.floor(diff / 3600)}h ago`
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`
+  return new Date(dateStr).toLocaleDateString()
+}
+
+function LastIngestedBadge() {
+  const { dataset } = useDataset()
+  const { authHeader } = useAuth()
+  const [info, setInfo] = useState(null)
+
+  useEffect(() => {
+    if (!dataset) return
+    axios.get('/api/datasets/last_seen', { headers: authHeader, params: { dataset } })
+      .then(r => setInfo(r.data))
+      .catch(() => {})
+  }, [dataset])
+
+  if (!info?.last_seen) return null
+
+  const rel = relativeTime(info.last_seen)
+  const diffH = (Date.now() - new Date(info.last_seen).getTime()) / 3600000
+  const color = diffH < 12 ? '#22c55e' : diffH < 48 ? '#eab308' : '#ef4444'
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+      <span style={{ color, fontSize: 9 }}>●</span>
+      <span style={{ fontSize: 11, color: '#475569' }}>RITA last saw data</span>
+      <span style={{ fontSize: 11, color, fontWeight: 600 }}>{rel}</span>
+    </div>
+  )
+}
+
 function Shell() {
   const { logout } = useAuth()
+  const navigate = useNavigate()
+  const [helpOpen, setHelpOpen] = useState(false)
+
   return (
     <div className="app">
       <nav className="sidebar">
-        <div className="logo"><img src={prsmLogo} alt="PRSM" style={{ width: '100%', display: 'block' }} /></div>
+        <div
+          className="logo"
+          onClick={() => navigate('/')}
+          style={{ cursor: 'pointer' }}
+        >
+          <img src={prsmLogo} alt="PRSM" style={{ width: '100%', display: 'block' }} />
+        </div>
         <DatasetPicker />
         <ActiveFiltersBadge />
-        <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Dashboard</NavLink>
+        <NavLink to="/dashboard" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Dashboard</NavLink>
         <NavLink to="/investigate" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Investigate</NavLink>
         <NavLink to="/beaconing" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Beaconing</NavLink>
         <NavLink to="/longconns" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Long Connections</NavLink>
@@ -125,8 +183,19 @@ function Shell() {
         </div>
       </nav>
       <main className="content">
+        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+          <button
+            onClick={() => setHelpOpen(true)}
+            style={{
+              background: 'none', border: '1px solid #2d3148', color: '#475569',
+              borderRadius: 6, padding: '0.25rem 0.6rem', cursor: 'pointer',
+              fontSize: 13, fontWeight: 600,
+            }}
+          >?</button>
+          <LastIngestedBadge />
+        </div>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/beaconing" element={<Beaconing />} />
           <Route path="/longconns" element={<LongConns />} />
           <Route path="/dns" element={<DNS />} />
@@ -136,14 +205,20 @@ function Shell() {
           <Route path="/whitelist" element={<Whitelist />} />
         </Routes>
       </main>
+      <HelpPanel open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   )
 }
 
 function AuthGate() {
-  const { token, authHeader } = useAuth()
+  const { token } = useAuth()
   if (!token) return <Login />
-  return <Shell />
+  return (
+    <Routes>
+      <Route path="/" element={<MasterDashboard />} />
+      <Route path="/*" element={<Shell />} />
+    </Routes>
+  )
 }
 
 export default function App() {

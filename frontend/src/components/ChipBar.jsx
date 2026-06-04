@@ -1,5 +1,36 @@
 import { useState, useRef } from 'react'
 
+function InfoTooltip() {
+  const [show, setShow] = useState(false)
+  return (
+    <div style={{ position: 'relative', flexShrink: 0 }}>
+      <span
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+        style={{ color: '#475569', cursor: 'default', fontSize: 14, userSelect: 'none', lineHeight: 1 }}
+      >ⓘ</span>
+      {show && (
+        <div style={{
+          position: 'absolute', right: 0, top: '100%', marginTop: 6, zIndex: 200,
+          background: '#1a1d27', border: '1px solid #2d3148', borderRadius: 8,
+          padding: '0.75rem 1rem', width: 320, boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
+          fontSize: 12, color: '#94a3b8', lineHeight: 1.65,
+        }}>
+          <div style={{ fontWeight: 700, color: '#e2e8f0', marginBottom: '0.5rem' }}>Filter syntax</div>
+          <ul style={{ margin: 0, paddingLeft: '1.1rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+            <li>Type an IP, CIDR (<code style={{ color: '#7c85f5' }}>10.0.0.0/24</code>), or FQDN and press Enter</li>
+            <li>Prefix with <code style={{ color: '#ef4444' }}>!</code> or <code style={{ color: '#ef4444' }}>NOT</code> to exclude: <code style={{ color: '#ef4444' }}>!8.8.8.8</code></li>
+            <li>Score filters: <code style={{ color: '#eab308' }}>beacon&gt;50</code> · <code style={{ color: '#eab308' }}>threat&gt;=75</code> · <code style={{ color: '#eab308' }}>dns&lt;25</code></li>
+            <li>Operators: <code style={{ color: '#94a3b8' }}>&gt; &lt; &gt;= &lt;= =</code></li>
+            <li>Keywords: <code style={{ color: '#7c85f5' }}>beacon</code> · <code style={{ color: '#94a3b8' }}>threat</code> · <code style={{ color: '#38bdf8' }}>longconn</code> · <code style={{ color: '#a78bfa' }}>dns</code> · <code style={{ color: '#f97316' }}>strobe</code> · <code style={{ color: '#f87171' }}>intel</code></li>
+            <li>Toggle <strong style={{ color: '#7c85f5' }}>OR</strong> / <strong style={{ color: '#eab308' }}>AND</strong> to match any or all chips</li>
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export const SCORE_RE    = /^(threat|beacon|longconn|dns|strobe|intel)(>=|<=|>|<|=)(\d{1,3})$/i
 export const CATEGORY_RE = /^(threat|beacon|longconn|dns|strobe|intel)$/i
 export const SCORE_KEYWORDS = ['threat', 'beacon', 'longconn', 'dns', 'strobe', 'intel']
@@ -86,7 +117,7 @@ export function ChipInput({ chips, onChange }) {
         onChange={e => setInput(e.target.value)}
         onKeyDown={handleKey}
         onBlur={() => input && add(input)}
-        placeholder={chips.length ? '' : 'IP, CIDR, FQDN, or score filter (e.g. beacon>50)…'}
+        placeholder={chips.length ? '' : 'IP, CIDR, FQDN or score filter (e.g. beacon>50)'}
         style={{ flex: 1, minWidth: 180, background: 'none', border: 'none', color: '#e2e8f0', fontSize: 13, outline: 'none' }}
       />
     </div>
@@ -118,6 +149,7 @@ export default function ChipBar({ chips, setChips, andMode, setAndMode }) {
         }}
       >AND</button>
       <ChipInput chips={chips} onChange={setChips} />
+      <InfoTooltip />
       {chips.length > 0 && (
         <button
           onClick={() => setChips([])}
