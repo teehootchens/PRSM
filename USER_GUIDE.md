@@ -34,7 +34,7 @@ The core workflow is:
 ### What PRSM is not
 
 - **Not a SIEM.** PRSM does not ingest raw events, generate alerts, or correlate across log sources beyond what RITA already processes.
-- **Not real-time.** PRSM shows scored data from the last RITA run. The "RITA last saw data" timestamp in the upper right of every page shows how fresh the current dataset is.
+- **Not real-time.** PRSM shows scored data from the last RITA run. The **RITA last ingested data** indicator in the upper right of every analysis page shows how fresh the current dataset is.
 - **Not a packet capture tool.** PRSM works with Zeek connection metadata — src, dst, port, byte counts, duration, timing. It does not display packet payloads.
 
 ---
@@ -47,13 +47,15 @@ Navigate to `https://<server-ip>` and log in with your credentials. The browser 
 
 Your session is stored in `sessionStorage`, which means it persists across page refreshes within the same tab but is cleared when you close the tab. This is intentional — closing the browser ends your session without requiring an explicit logout.
 
-### Dataset selection
+### Master Dashboard and dataset selection
 
-PRSM supports multiple RITA datasets, each corresponding to a different import batch or network segment. The dataset picker is at the top of the left sidebar. Changing the dataset reloads all pages against the new dataset. Everything you see — every score, every connection, every count — comes from whichever dataset is selected.
+After logging in, you land on the **Master Dashboard** — a full-screen overview of all available RITA datasets. Each dataset card shows the dataset name, data freshness, total scored connections, critical-severity count, max score, and a proportion bar breaking down connections by severity band. Click any card to select that dataset and enter the analysis section.
+
+Once inside the analysis section, the dataset picker at the top of the left sidebar lets you switch datasets at any time without returning to the Master Dashboard. Clicking the **PRSM logo** at the top of the sidebar returns you to the Master Dashboard. Everything you see — every score, every connection, every count — comes from whichever dataset is selected.
 
 ### Data freshness indicator
 
-The upper right corner of every page shows **RITA last saw data** with a color-coded relative timestamp:
+The upper right corner of every analysis page shows **RITA last ingested data** with a color-coded relative timestamp:
 
 - **Green** — data is less than 12 hours old
 - **Yellow** — 12–48 hours old (RITA may be delayed)
@@ -78,6 +80,22 @@ The left sidebar also shows an **active filters badge** when filters are set, li
 ---
 
 ## 3. Page Reference
+
+### Master Dashboard
+
+The Master Dashboard is the entry point after login. It shows all available RITA datasets before any dataset is selected, giving analysts an immediate cross-dataset overview without entering a specific dataset first.
+
+**Dataset cards** — One card per RITA dataset. Each card shows:
+- Dataset name
+- **Last seen** — color-coded freshness: green (< 12h), yellow (12–48h), red (> 48h). A **⚠ stale** label appears when data is more than 24 hours old.
+- **Total** — total scored connections in the dataset
+- **Critical** — count of connections scoring ≥ 75%
+- **Max Score** — highest threat score in the dataset
+- **Proportion bar** — visual breakdown of Critical/High/Medium/Low severity across all connections
+
+Click a card to select that dataset and navigate to the Dashboard for detailed analysis.
+
+---
 
 ### Dashboard
 
@@ -273,7 +291,7 @@ Score comparisons are done in integer space (the stored float score × 100, roun
 
 ### Category keyword chips
 
-Typing a bare keyword without an operator filters for rows that have that category tag:
+Typing a bare keyword without an operator filters for rows that have any score in that category. This is a wider net than the badge display threshold (≥ 25%):
 
 ```
 beacon       → rows where beacon_score > 0
@@ -284,7 +302,7 @@ strobe       → rows where strobe_score > 0
 threat       → rows where beacon_threat_score > 0
 ```
 
-These chips render in the same color as their corresponding category badge so you can visually connect the chip to the rows it matches.
+These chips render in the same color as their corresponding category badge so you can visually connect the chip to the rows it matches. Category keyword chips are the fastest way to isolate all connections belonging to a detection category without guessing a score threshold.
 
 ### Score and IP chips together
 
@@ -295,15 +313,17 @@ Score chips and IP/FQDN chips participate in the same OR/AND toggle:
 
 ### Reading the results table
 
-**Category badges** appear in the Categories column and indicate which threat categories the connection is active in. A badge only appears when the corresponding score is above zero:
+**Category badges** appear in the Categories column and indicate which threat categories the connection is active in. A badge appears when the corresponding score reaches ≥ 25%:
 
 | Badge | Appears when |
 |---|---|
-| Beacon | `beacon_score > 0` |
-| Long | `long_conn_score > 0` |
-| DNS | `c2_over_dns_score > 0` |
-| TI | `threat_intel = true` |
-| Strobe | `strobe_score > 0` |
+| Beacon | `beacon_score ≥ 25%` |
+| Long | `long_conn_score ≥ 25%` |
+| DNS | `c2_over_dns_score ≥ 25%` |
+| TI | `threat_intel = true` (no score threshold) |
+| Strobe | `strobe_score ≥ 25%` |
+
+> **Note:** Category *keyword chips* (`beacon`, `longconn`, etc.) filter server-side at `> 0` — they surface all rows where the category has any score, even below 25%. This is intentional: category chips cast a wide net; badges show only meaningfully-scored detections.
 
 The **DNS badge** shows the subdomain count inline when it is greater than zero: **DNS • 14**. A high subdomain count is the primary indicator of DNS tunneling.
 
@@ -351,6 +371,26 @@ Clicking a row (anywhere except the value text) opens a slide-out panel from the
 
 Close the panel by clicking the **✕** button or clicking anywhere on the dimmed backdrop.
 
+### Shared Hosts view
+
+When exactly one non-negated target chip (an IP, CIDR, or FQDN — not a score or category chip) is active, a **Shared Hosts** tab becomes available next to the **Activity over time** tab.
+
+Click **Shared Hosts** to switch the view panel to a table of all internal source IPs that communicated with the target destination in the current dataset and time range. The table shows:
+
+- **Source IP** — the internal host that talked to the target. Left-click to add it as a chip in the Investigate bar. Right-click for suppress / global filter / pivot options.
+- **Threat Score** — max threat score for that host's connections to this destination, displayed as a color-coded progress bar
+- **Connections** — total connection count
+- **Total Bytes** — total bytes transferred
+- **Last Seen** — most recent connection timestamp
+
+**Investigate all sources** — a button below the table adds all listed source IPs as chips in a single operation, switching to OR mode automatically. This is the fastest way to pivot from "who talks to this destination?" to a full investigation across all those hosts.
+
+The Shared Hosts view respects all active global filters (time range, score range, show suppressed).
+
+Switching chips, changing the dataset, or navigating away automatically returns the panel to **Activity over time**.
+
+---
+
 ### Trend chart
 
 Below the summary cards, the Activity over time chart shows daily counts for Connections, Max Score, and Bytes. Each series is toggleable using the labeled buttons above the chart. When more than 60 days of data is visible, drag across the chart to zoom into a specific range. When zoomed, an **Apply as filter** button sets that date range as the active time filter, and a **Reset zoom** button restores the full view.
@@ -367,6 +407,10 @@ These update whenever the chip set or filters change.
 
 ## 5. Interactions Reference
 
+### PRSM logo
+
+Clicking the **PRSM logo** at the top of the left sidebar returns to the Master Dashboard (dataset selection screen) from any analysis page.
+
 ### Left-click src/dst/FQDN
 
 Left-clicking a source IP, destination IP, or FQDN value in a table cell adds it as a filter:
@@ -380,6 +424,7 @@ Left-clicking a source IP, destination IP, or FQDN value in a table cell adds it
 | Strobe Detection | Adds the value as a chip in the Strobe Detection chip bar |
 | Threat Intel | Adds the value as a chip in the Threat Intel chip bar |
 | Dashboard (top tables) | Adds the value as a chip in the Dashboard chip bar |
+| Shared Hosts (Investigate) | Adds the source IP as a chip in the Investigate chip bar |
 
 Text selection is protected — if you click and drag to select text, the filter/chip action does not fire.
 

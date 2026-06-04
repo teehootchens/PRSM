@@ -10,13 +10,24 @@ PRSM is designed to be deployed directly on top of an existing RITA v5 server.
 
 PRSM surfaces and correlates RITA's threat detections across:
 
+- **Master Dashboard** — dataset landing page showing all RITA datasets at a glance with score distribution bars, data freshness indicator, and critical/total counts per dataset; click a card to enter that dataset
+- **Dashboard** — per-dataset summary stats, detection trend chart, and Score Distribution band filtering
+- **Investigate** — unified multi-target investigation across all threat categories simultaneously
 - **Beaconing** — periodic outbound connections indicative of C2
 - **Long Connections** — persistent outbound sessions by duration
 - **DNS Analysis** — C2-over-DNS and DNS tunneling detection
 - **Strobe Detection** — high connection count hosts
 - **Threat Intel** — connections matching known bad IPs/domains
-- **Investigate** — unified multi-target investigation across all categories
-- **Dashboard** — summary stats, detection trends, score distribution
+
+Key capabilities across all pages:
+
+- **Chip filter system** — present on every analysis page; add IPs, CIDRs, FQDNs, score expressions (`beacon>75`), or category keywords (`intel`) as filter chips; toggle OR/AND mode; prefix any chip with `!` or `NOT` to exclude
+- **Dual score slider** — set both a minimum and maximum score range simultaneously
+- **Right-click context menu** — suppress, add to global filter, or pivot to Investigate from any src/dst/FQDN value on any page
+- **Shared Hosts view** — on Investigate with a single destination chip active, shows all internal hosts that communicated with that destination
+- **Score Distribution band filtering** — click Critical/High/Medium/Low bands on the Dashboard to filter all dashboard content
+- **DNS subdomain count badge** — shows subdomain count inline on DNS-active rows (`DNS • 14`)
+- **Data freshness indicator** — color-coded "RITA last ingested data" timestamp on every analysis page header; per-card freshness on the Master Dashboard
 
 ---
 
@@ -26,8 +37,8 @@ PRSM surfaces and correlates RITA's threat detections across:
 |---|---|
 | OS | Ubuntu 22.04+ (tested), Debian 12+ |
 | Python | 3.10+ |
-| Node.js | 22+ |
-| npm | 10+ |
+| Node.js | 18+ |
+| npm | Any version bundled with Node 18+ |
 | Nginx | Any recent version (apt) |
 | RITA | v5.1+ via Docker Compose |
 | ClickHouse | Exposed to localhost:8123 |
@@ -61,11 +72,61 @@ cd /opt/rita && docker compose up -d clickhouse
 curl http://localhost:8123/ping  # should return: Ok.
 ```
 
+> `setup.sh` auto-detects when ClickHouse is running in Docker but not bound to localhost and will patch `docker-compose.yml` and restart the container automatically.
+
 ---
 
 ## Deployment
 
-> **Note:** A `setup.sh` install script is planned for v1 release. Until then, follow these manual steps.
+`setup.sh` is the primary install method. Run it from the PRSM repo directory on the RITA server:
+
+```bash
+cd /opt/PRSM
+sudo bash setup.sh
+```
+
+The script runs as root and handles everything: pre-flight checks, dependency installs, `prsm` service account creation, interactive `.env` setup (prompts for GUI username and password, generates bcrypt hash and token secret automatically), suppression database initialization, frontend build, self-signed SSL certificate generation, Nginx site configuration, systemd service installation and startup, ufw firewall rules, sudoers entry for build operations, and a final health check. PRSM is accessible at `https://<server-ip>` immediately after the script completes.
+
+> Accept the browser certificate warning — this is expected for a self-signed cert.
+
+### Flags
+
+| Flag | What it does |
+|---|---|
+| (none) | Standard install — downloads Nginx, Python packages, and npm dependencies |
+| `--offline` | Skip all downloads; requires pre-staged packages. See [Offline bundle preparation](#offline-bundle-preparation). |
+| `--force` | Overwrite an existing `.env` and SSL certificate. Use when re-running after a partial install. |
+| `--uninstall` | Remove PRSM: stops and disables the service, removes the systemd unit, Nginx site config, SSL certs, `prsm` service account, sudoers entry, and `/opt/PRSM`. Does **not** remove Nginx, Python packages, ufw rules, or RITA. |
+| `--uninstall --keep-data` | Same as `--uninstall` but saves `.env` and `whitelist.db` to `/tmp/prsm-backup/` before deletion. |
+
+> Always invoke as `sudo bash setup.sh`, not `sudo ./setup.sh` — the `SUDO_USER` variable is used internally to configure build permissions for the invoking account.
+
+### Offline bundle preparation
+
+For air-gapped servers, prepare the bundle on an internet-connected machine first:
+
+```bash
+# On the internet-connected machine:
+pip3 download fastapi uvicorn clickhouse-connect \
+  python-multipart openpyxl "passlib[bcrypt]" \
+  python-dotenv -d ./offline_packages
+
+cd frontend && npm install && cd ..
+
+# Copy the entire PRSM directory to the target server,
+# including offline_packages/ and frontend/node_modules/
+
+# On the target server:
+sudo bash setup.sh --offline
+```
+
+In offline mode, the script validates that all Python packages are already importable and that `frontend/node_modules/` is present, then proceeds without any downloads.
+
+---
+
+## Advanced / Manual Install
+
+The steps below document what `setup.sh` performs internally, for reference or customization.
 
 ### 0. Set deployment variables
 
@@ -351,6 +412,10 @@ Access PRSM at `https://$PRSM_SERVER_IP` — accept the self-signed certificate 
     |       v
     +-- PRSM Backend     (127.0.0.1:8080, FastAPI/uvicorn, prsm user)
     +-- PRSM Frontend    (React/Vite, served as static files by FastAPI)
+              |
+              +-- /           Master Dashboard (dataset selection, entry point)
+              +-- /dashboard  Per-dataset analysis pages
+              +-- /investigate, /beaconing, ...
 ```
 
 ---
@@ -366,7 +431,7 @@ Access PRSM at `https://$PRSM_SERVER_IP` — accept the self-signed certificate 
 | Network exposure | uvicorn bound to localhost only; ClickHouse localhost only |
 | Security headers | HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy |
 | Failed login logging | Logged to systemd journal with client IP (`journalctl -u prsm`) |
-| Secrets | `.env` owned by dev user, group `prsm`, mode `640` — never committed |
+| Secrets | `.env` owned by `prsm` service account, mode `640` — never committed |
 
 ---
 

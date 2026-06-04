@@ -46,9 +46,9 @@ Primary use cases:
 │       ├── beaconing.py
 │       ├── charts.py
 │       ├── dashboard.py
-│       ├── datasets.py
+│       ├── datasets.py       # Includes /api/datasets/summary for Master Dashboard
 │       ├── dns.py
-│       ├── investigate.py    # Search/filter with chip system, NOT support
+│       ├── investigate.py    # Search/filter with chip system, NOT support, shared-hosts endpoint
 │       ├── longconns.py
 │       ├── protocols.py
 │       ├── strobe.py
@@ -56,26 +56,30 @@ Primary use cases:
 │       └── whitelist.py      # SQLite CRUD for suppression list
 ├── frontend/
 │   ├── src/
-│   │   ├── App.jsx           # Router, nav, layout
+│   │   ├── App.jsx           # Router, nav, layout, HelpPanel wiring, PRSM logo nav
 │   │   ├── AuthContext.jsx   # Token storage, authHeader provider
 │   │   ├── DatasetContext.jsx
 │   │   ├── FilterContext.jsx
 │   │   ├── assets/
 │   │   │   └── prsm-logo.svg
 │   │   ├── components/
-│   │   │   ├── FilterBar.jsx # Global min score + protocol filter
+│   │   │   ├── ChipBar.jsx       # Chip input, OR/AND toggle, InfoTooltip, detectChipType
+│   │   │   ├── FilterBar.jsx     # Global min/max score slider + protocol/type/TI filters
+│   │   │   ├── HelpPanel.jsx     # Slide-out quick reference panel (? button)
 │   │   │   └── SuppressDialog.jsx
 │   │   └── pages/
 │   │       ├── Beaconing.jsx
 │   │       ├── Dashboard.jsx
 │   │       ├── DNS.jsx
-│   │       ├── Investigate.jsx
+│   │       ├── Investigate.jsx   # Includes SharedHostsPanel, CategoryBadge (≥ 25% threshold)
 │   │       ├── Login.jsx
 │   │       ├── LongConns.jsx
+│   │       ├── MasterDashboard.jsx  # Dataset selection landing page (route: /)
 │   │       ├── Strobe.jsx
 │   │       ├── ThreatIntel.jsx
 │   │       └── Whitelist.jsx
 │   └── index.html
+├── setup.sh                  # One-command installer
 ├── .env                      # Secrets — never committed
 ├── .gitignore
 ├── whitelist.db              # SQLite — never committed
@@ -109,8 +113,11 @@ Primary use cases:
 - NOT support: chips are `{ value, negate }` objects
 - Negative chips render red with NOT badge
 - NOT chips always treated as mandatory exclusions regardless of OR/AND mode
-- Backend receives `targets` (comma-separated), `and_mode` (bool), `not_targets` (comma-separated)
+- Backend receives `targets`, `and_mode`, `not_targets`, `score_filters`, `not_score_filters`, `category_filters`, `not_category_filters`
 - `build_target_conditions()` in `investigate.py` handles IP, CIDR, FQDN parsing
+- **Shared Hosts view** — enabled when exactly one non-negated target chip is active; calls `/api/investigate/shared-hosts`; "Investigate all sources" button adds all returned IPs as OR-mode chips
+- **Category badges** in `CategoryBadge` component use threshold `>= 0.25` (25%); category keyword chips filter server-side at `> 0`
+- **Chip types**: `target` (IP/CIDR/FQDN), `score` (e.g. `beacon>75`), `category` (bare keyword like `intel`)
 
 ### Frontend State
 - Dataset selection: `DatasetContext`
@@ -182,14 +189,17 @@ python3 -c "from passlib.hash import bcrypt; print(bcrypt.hash('yourpassword'))"
 ---
 
 ## Nav Order (App.jsx)
-1. Dashboard
-2. Investigate
-3. Beaconing
-4. Long Connections
-5. DNS Analysis
-6. Strobe Detection
-7. Threat Intel
-8. Suppression List
+- `/` → MasterDashboard (no shell/sidebar — full-screen dataset picker)
+- Shell routes (sidebar + nav):
+  1. Dashboard
+  2. Investigate
+  3. Beaconing
+  4. Long Connections
+  5. DNS Analysis
+  6. Strobe Detection
+  7. Threat Intel
+  8. Suppression List
+- Clicking PRSM logo in sidebar navigates to `/` (MasterDashboard)
 
 ---
 
@@ -203,7 +213,6 @@ python3 -c "from passlib.hash import bcrypt; print(bcrypt.hash('yourpassword'))"
 ---
 
 ## Deferred / Roadmap
-- `setup.sh` install script — planned for v1 release
 - KQL or Lucene query language for Investigate page
 - Firewall subnet scoping (deferred — not portable across deployments)
 - Failed login UI dashboard (logs go to journald via `journalctl -u prsm`)
