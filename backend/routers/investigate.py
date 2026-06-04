@@ -49,6 +49,81 @@ def parse_category_filter(expr: str) -> Optional[str]:
 
 router = APIRouter(prefix="/api/investigate", tags=["investigate"])
 
+def build_dst_condition(target: str) -> str:
+    """Build a WHERE condition matching only the dst column (or fqdn) for a single target."""
+    target = target.strip()
+    if not target:
+        return "1=0"
+    if '/' in target:
+        safe = target.replace("'", "''")
+        return f"isIPAddressInRange(replaceRegexpOne(IPv6NumToString(dst), '^::ffff:', ''), '{safe}')"
+    if '.' in target:
+        try:
+            ipaddress.ip_address(target)
+            return f"dst = toIPv6('::ffff:{target}')"
+        except ValueError:
+            safe = target.replace("'", "''")
+            return f"fqdn = '{safe}'"
+    return "1=0"
+
+
+@router.get("/shared-hosts")
+def shared_hosts(
+    dataset: str = Query(...),
+    target: str = Query(...),
+    since_hours: Optional[int] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    min_score: float = Query(0.0),
+    max_score: Optional[float] = Query(None),
+    show_suppressed: bool = Query(False),
+    limit: int = Query(200, le=1000),
+):
+    """Return all src IPs that communicated with the given dst target, grouped and scored."""
+    client = get_client()
+    dst_cond  = build_dst_condition(target)
+    time_cond = time_condition(since_hours, date_from, date_to)
+    supp_cond = get_suppression_conditions(dataset, show_suppressed)
+
+    extra = []
+    if min_score > 0:
+        extra.append(f"beacon_threat_score >= {min_score}")
+    if max_score is not None:
+        extra.append(f"beacon_threat_score <= {max_score}")
+    extra_cond = ("AND " + " AND ".join(extra)) if extra else ""
+
+    base_where = f"WHERE {dst_cond} {time_cond} {supp_cond} {extra_cond}"
+
+    try:
+        result = client.query(f"""
+            SELECT
+                IPv6NumToString(src)         AS src,
+                max(beacon_threat_score)     AS max_threat_score,
+                sum(`count`)                 AS total_connections,
+                sum(total_bytes)             AS total_bytes,
+                max(last_seen)               AS last_seen
+            FROM `{dataset}`.threat_mixtape
+            {base_where}
+            GROUP BY src
+            ORDER BY max_threat_score DESC
+            LIMIT {limit}
+        """)
+    except Exception:
+        return {"hosts": [], "target": target}
+
+    hosts = [
+        {
+            "src":               row[0],
+            "max_threat_score":  float(row[1]) if row[1] else 0.0,
+            "total_connections": int(row[2]) if row[2] else 0,
+            "total_bytes":       int(row[3]) if row[3] else 0,
+            "last_seen":         str(row[4]) if row[4] else None,
+        }
+        for row in result.result_rows
+    ]
+    return {"hosts": hosts, "target": target}
+
+
 def build_target_conditions(targets: list[str]) -> str:
     """Build WHERE conditions for a list of IPs, CIDRs, and FQDNs."""
     ip_exact, ip_cidr, fqdns = [], [], []
