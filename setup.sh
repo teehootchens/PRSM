@@ -529,7 +529,7 @@ if $OFFLINE; then
 else
     ok "Installing system packages..."
     apt-get update -qq
-    apt-get install -y -qq nginx openssl curl
+    apt-get install -y -qq nginx openssl curl python3-pip
     ok "System packages installed"
 
     ok "Installing Node.js LTS from NodeSource..."
