@@ -302,8 +302,9 @@ with open(path) as f:
     content = f.read()
 
 # Only consider the port bound if it appears on an uncommented line
+# Detect both short-form (8123:8123) and long-form (published: 8123)
 active = any(
-    '8123:8123' in line
+    '8123:8123' in line or bool(re.search(r'published:\s*["\']?8123["\']?', line))
     for line in content.splitlines()
     if not line.lstrip().startswith('#')
 )
@@ -311,43 +312,40 @@ if active:
     print("already_bound")
     exit(0)
 
-# If 8123:8123 exists but is commented out, uncomment it
-# Handles RITA v5.1.2 format: #   - 127.0.0.1:8123:8123 (with leading whitespace)
-uncommented = re.sub(
-    r'^\s*#\s*-\s*127\.0\.0\.1:8123:8123\s*$',
-    '      - "127.0.0.1:8123:8123"',
-    content, flags=re.MULTILINE
+LONG_FORM = (
+    '    ports:\n'
+    '      - target: 8123\n'
+    '        host_ip: "127.0.0.1"\n'
+    '        published: 8123\n'
+    '        protocol: tcp'
 )
-if uncommented != content:
-    with open(path, 'w') as f:
-        f.write(uncommented)
-    print("port_uncommented")
-    exit(0)
 
-# Try to insert after an existing ports: key inside the clickhouse service block
+# Replace a commented-out ports block (# ports: header + commented entries)
+# Handles RITA v5 format where the entire ports section is commented out
 new_content = re.sub(
-    r'(  clickhouse:(?:\n(?!  \w).*)*?\n    ports:\n)',
-    lambda m: m.group(0) + '      - "127.0.0.1:8123:8123"\n',
-    content, flags=re.DOTALL
+    r'[ \t]*# ports:\n(?:[ \t]*#[^\n]*\n)*',
+    LONG_FORM + '\n',
+    content
 )
-
 if new_content != content:
     with open(path, 'w') as f:
         f.write(new_content)
-    print("port_added")
-else:
-    # No existing ports: section — add one after the clickhouse: service line
-    new_content = re.sub(
-        r'(  clickhouse:\n)',
-        r'\1    ports:\n      - "127.0.0.1:8123:8123"\n',
-        content
-    )
-    if new_content != content:
-        with open(path, 'w') as f:
-            f.write(new_content)
-        print("ports_section_added")
-    else:
-        print("manual_edit_needed")
+    print("port_uncommented")
+    exit(0)
+
+# No commented ports block — append long-form ports section after clickhouse: service line
+new_content = re.sub(
+    r'(  clickhouse:\n)',
+    lambda m: m.group(1) + LONG_FORM + '\n',
+    content
+)
+if new_content != content:
+    with open(path, 'w') as f:
+        f.write(new_content)
+    print("ports_section_added")
+    exit(0)
+
+print("manual_edit_needed")
 PYEOF
             cd "$RITA_DIR" && docker compose down clickhouse && docker compose up -d clickhouse
             # Wait up to 30s for ClickHouse to be ready
