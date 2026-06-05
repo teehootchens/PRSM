@@ -315,7 +315,7 @@ if active:
 # Handles RITA v5.1.2 format: #   - 127.0.0.1:8123:8123 (with leading whitespace)
 uncommented = re.sub(
     r'^\s*#\s*-\s*127\.0\.0\.1:8123:8123\s*$',
-    '      - 127.0.0.1:8123:8123',
+    '      - "127.0.0.1:8123:8123"',
     content, flags=re.MULTILINE
 )
 if uncommented != content:
@@ -349,7 +349,7 @@ else:
     else:
         print("manual_edit_needed")
 PYEOF
-            cd "$RITA_DIR" && docker compose up -d clickhouse
+            cd "$RITA_DIR" && docker compose down clickhouse && docker compose up -d clickhouse
             # Wait up to 30s for ClickHouse to be ready
             for i in $(seq 1 15); do
                 sleep 2
