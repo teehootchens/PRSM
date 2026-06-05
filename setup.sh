@@ -229,20 +229,15 @@ else
     fi
 fi
 
-# ── npm ──
-npm_bin=$(command -v npm 2>/dev/null || true)
-if [ -z "$npm_bin" ]; then
-    fail "npm not found — install with: apt install npm"
-else
-    npm_ver=$(npm --version 2>/dev/null || true)
-    ok "npm $npm_ver"
-fi
+# ── npm ── (bundled with NodeSource Node.js install — no separate check needed)
 
 # ── nginx ──
 if command -v nginx &>/dev/null; then
     ok "nginx installed"
+elif $OFFLINE; then
+    fail "nginx not installed — in offline mode, install manually: apt install nginx"
 else
-    fail "nginx not installed — install with: apt install nginx"
+    warn "nginx not installed — will be installed in Section 2"
 fi
 
 # ── Docker ──
@@ -484,9 +479,9 @@ echo -e "${BOLD}PRE-FLIGHT SUMMARY${RESET}"
 printf '  %-50s %s\n' "Running as root"                "$(echo -e "${GREEN}✓${RESET}")"
 [ -n "${os_pretty:-}" ] && printf '  %-50s %s\n' "$os_pretty"       "$(echo -e "${GREEN}✓${RESET}")" || true
 [ -n "${py_ver:-}" ]    && printf '  %-50s %s\n' "Python $py_ver"   "$(echo -e "${GREEN}✓${RESET}")" || true
-[ -n "${node_ver:-}" ]  && printf '  %-50s %s\n' "Node $node_ver"   "$(echo -e "${GREEN}✓${RESET}")" || true
-[ -n "${npm_ver:-}" ]   && printf '  %-50s %s\n' "npm $npm_ver"     "$(echo -e "${GREEN}✓${RESET}")" || true
-$ch_ok && printf '  %-50s %s\n' "ClickHouse ${CLICKHOUSE_HOST}:${CLICKHOUSE_PORT}" "$(echo -e "${GREEN}✓${RESET}")" || true
+[ -n "${node_ver:-}" ]  && printf '  %-50s %s\n' "Node $node_ver"                        "$(echo -e "${GREEN}✓${RESET}")" || true
+[ -n "${rita_ver:-}" ]  && printf '  %-50s %s\n' "RITA v${rita_ver} at ${RITA_DIR}"    "$(echo -e "${GREEN}✓${RESET}")" || true
+$ch_ok && printf '  %-50s %s\n' "ClickHouse ${CLICKHOUSE_HOST}:${CLICKHOUSE_PORT}"     "$(echo -e "${GREEN}✓${RESET}")" || true
 for w in "${PREFLIGHT_WARNINGS[@]}"; do
     printf '  %-50s %s\n' "$w" "$(echo -e "${YELLOW}⚠${RESET}")"
 done
