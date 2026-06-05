@@ -12,7 +12,7 @@ import sys
 import random
 import uuid
 import ipaddress
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 try:
     import clickhouse_connect
@@ -20,15 +20,83 @@ except ImportError:
     print("ERROR: clickhouse-connect not installed.")
     sys.exit(1)
 
+# ---- configurable ----
+DATASET = "sensor250"
+# ----------------------
+
+TABLE = f"{DATASET}.threat_mixtape"
+TEST_IMPORT_ID = b"TESTDATA" + b"\x00" * 8
+
 client = clickhouse_connect.get_client(
     host="127.0.0.1", port=8123,
     username="default", password="",
 )
-DATASET = "sensor250"
-TABLE = f"{DATASET}.threat_mixtape"
-TEST_IMPORT_ID = b"TESTDATA" + b"\x00" * 8
+
+# ---------- schema bootstrap ----------
+
+def ensure_schema():
+    client.command(f"CREATE DATABASE IF NOT EXISTS {DATASET}")
+    client.command(f"""
+CREATE TABLE IF NOT EXISTS {DATASET}.threat_mixtape
+(
+    `analyzed_at` DateTime64(6),
+    `import_id` FixedString(16),
+    `hash` FixedString(16),
+    `src` IPv6,
+    `dst` IPv6,
+    `src_nuid` UUID,
+    `dst_nuid` UUID,
+    `fqdn` String,
+    `server_ips` Array(IPv6),
+    `proxy_ips` Array(IPv6),
+    `total_bytes` UInt64,
+    `last_seen` DateTime,
+    `port_proto_service` Array(String),
+    `count` UInt64,
+    `ts_unique` UInt64,
+    `proxy_count` UInt64,
+    `open_count` UInt64,
+    `beacon_type` LowCardinality(String),
+    `beacon_score` Float64,
+    `beacon_threat_score` Float64,
+    `ts_score` Float64,
+    `ds_score` Float64,
+    `dur_score` Float64,
+    `hist_score` Float64,
+    `ts_intervals` Array(Int64),
+    `ts_interval_counts` Array(Int64),
+    `ds_sizes` Array(Int64),
+    `ds_size_counts` Array(Int64),
+    `total_duration` Float64,
+    `long_conn_score` Float64,
+    `strobe_score` Float64,
+    `subdomain_count` UInt64,
+    `c2_over_dns_score` Float64,
+    `c2_over_dns_direct_conn_score` Float64,
+    `threat_intel` Bool,
+    `threat_intel_score` Float64,
+    `modifier_name` LowCardinality(String),
+    `modifier_score` Float64,
+    `modifier_value` String,
+    `prevalence_total` UInt64,
+    `prevalence` Float64,
+    `prevalence_score` Float64,
+    `network_size` UInt64,
+    `first_seen_historical` DateTime,
+    `first_seen_score` Float64,
+    `threat_intel_data_size_score` Float64,
+    `missing_host_count` UInt64,
+    `missing_host_header_score` Float64
+)
+ENGINE = MergeTree
+PRIMARY KEY (analyzed_at, dst_nuid, src_nuid, src, fqdn, dst, hash)
+ORDER BY (analyzed_at, dst_nuid, src_nuid, src, fqdn, dst, hash)
+SETTINGS index_granularity = 8192
+""")
+    print(f"Schema ready: {TABLE}")
 
 # ---------- helpers ----------
+
 def rand_internal_ip():
     return ipaddress.IPv6Address(f"::ffff:10.{random.randint(1,10)}.{random.randint(1,254)}.{random.randint(1,254)}")
 
@@ -52,7 +120,7 @@ def is_weekday(dt):
 
 def make_base(src, dst, fqdn, beacon_type, count, total_bytes, total_duration, ts):
     return {
-        "analyzed_at":              datetime.utcnow(),
+        "analyzed_at":              datetime.now(timezone.utc),
         "import_id":                TEST_IMPORT_ID,
         "hash":                     rand_hash(),
         "src":                      src,
@@ -244,8 +312,9 @@ def gen_day(dt):
     return rows
 
 def insert():
-    # Generate one year of daily data
-    end   = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    ensure_schema()
+    now = datetime.now(timezone.utc)
+    end   = now.replace(hour=0, minute=0, second=0, microsecond=0)
     start = end - timedelta(days=365)
 
     total = 0
@@ -274,6 +343,7 @@ def insert():
     print(f"\nTo remove: python3 {sys.argv[0]} --delete")
 
 def delete():
+    ensure_schema()
     client.command(
         f"ALTER TABLE {TABLE} DELETE WHERE import_id = %(id)s",
         parameters={"id": TEST_IMPORT_ID},
