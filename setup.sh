@@ -215,7 +215,11 @@ fi
 # ── Node ──
 node_bin=$(command -v node 2>/dev/null || true)
 if [ -z "$node_bin" ]; then
-    fail "Node.js not found — install with: apt install nodejs (requires NodeSource repo for v18+)"
+    if $OFFLINE; then
+        fail "Node.js not found — in offline mode, install manually: apt install nodejs (requires NodeSource repo for v${NODE_MIN}+)"
+    else
+        warn "Node.js not found — will be installed via NodeSource in Section 2"
+    fi
 else
     node_ver=$(node --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.?[0-9]*' | head -1)
     if version_gte "$node_ver" "$NODE_MIN.0.0"; then
@@ -528,6 +532,12 @@ else
     apt-get update -qq
     apt-get install -y -qq nginx openssl curl
     ok "System packages installed"
+
+    ok "Installing Node.js LTS from NodeSource..."
+    NODE_LTS=$(curl -fsSL https://resolve.installnode.com/lts 2>/dev/null || echo "22")
+    curl -fsSL "https://deb.nodesource.com/setup_${NODE_LTS}.x" | bash - 2>/dev/null
+    apt-get install -y -qq nodejs
+    ok "Node.js ${NODE_LTS}.x LTS installed"
 
     ok "Installing Python packages..."
     pip3 install \
