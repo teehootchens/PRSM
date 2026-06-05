@@ -88,7 +88,7 @@ def shared_hosts(
     extra = []
     if min_score > 0:
         extra.append(f"beacon_threat_score >= {min_score}")
-    if max_score is not None:
+    if max_score is not None and max_score < 1.0:
         extra.append(f"beacon_threat_score <= {max_score}")
     extra_cond = ("AND " + " AND ".join(extra)) if extra else ""
 
@@ -174,6 +174,7 @@ def investigate(
     show_suppressed: bool = Query(False),
     limit: int = Query(500, le=2000),
     min_score: float = Query(0.0),
+    max_score: Optional[float] = Query(None),
     beacon_type: Optional[str] = Query(None),
     threat_intel_only: bool = Query(False),
     protocol: Optional[str] = Query(None),
@@ -244,6 +245,8 @@ def investigate(
     extra = []
     if min_score > 0:
         extra.append(f"beacon_threat_score >= {min_score}")
+    if max_score is not None and max_score < 1.0:
+        extra.append(f"beacon_threat_score <= {max_score}")
     if beacon_type:
         extra.append(f"beacon_type = '{beacon_type}'")
     if threat_intel_only:

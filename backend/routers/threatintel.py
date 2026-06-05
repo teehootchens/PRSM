@@ -27,7 +27,7 @@ def get_threatintel(
     conditions = ["threat_intel = true", f"threat_intel_score >= {min_score}"]
     if beacon_type: conditions.append(f"beacon_type = '{beacon_type}'")
     if protocol: conditions.append(f"has(port_proto_service, '{protocol}')")
-    if max_score is not None: conditions.append(f"beacon_threat_score <= {max_score}")
+    if max_score is not None and max_score < 1.0: conditions.append(f"beacon_threat_score <= {max_score}")
     where = " AND ".join(conditions) + f" {time_cond} {supp_cond}"
 
     query = f"""
