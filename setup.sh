@@ -14,6 +14,9 @@
 #   - frontend/node_modules/
 # to the target server and run:
 #   sudo bash setup.sh --offline
+#
+# To update an existing PRSM installation in-place:
+#   sudo bash setup.sh --update
 # ============================================================
 set -e
 
@@ -48,6 +51,7 @@ OFFLINE=false
 FORCE=false
 UNINSTALL=false
 KEEP_DATA=false
+UPDATE=false
 
 for arg in "$@"; do
     case "$arg" in
@@ -55,7 +59,8 @@ for arg in "$@"; do
         --force)      FORCE=true ;;
         --uninstall)  UNINSTALL=true ;;
         --keep-data)  KEEP_DATA=true ;;
-        *)  echo -e "${RED}Unknown flag: $arg${RESET}"; echo "Usage: sudo bash setup.sh [--offline] [--force] [--uninstall] [--keep-data]"; exit 1 ;;
+        --update)     UPDATE=true ;;
+        *)  echo -e "${RED}Unknown flag: $arg${RESET}"; echo "Usage: sudo bash setup.sh [--offline] [--force] [--uninstall] [--keep-data] [--update]"; exit 1 ;;
     esac
 done
 
@@ -176,12 +181,77 @@ if $UNINSTALL; then
     echo "  sudo chown \$USER:\$USER ${INSTALL_DIR}"
     echo "  git clone https://github.com/teehootchens/PRSM.git ${INSTALL_DIR}"
     echo "  cd ${INSTALL_DIR} && sudo bash setup.sh"
+    echo ""
+    echo -e "${BOLD}To update an existing installation in the future:${RESET}"
+    echo "  sudo bash ${INSTALL_DIR}/setup.sh --update"
     exit 0
 fi
 
 # ── Root check (early, before anything else) ─────────────────────────────────
 if [ "$EUID" -ne 0 ]; then
     die "This script must be run as root. Use: sudo bash setup.sh"
+fi
+
+# ── Update ────────────────────────────────────────────────────────────────────
+if $UPDATE; then
+    section "UPDATE PRSM"
+
+    if [ ! -d "$INSTALL_DIR" ] || [ ! -f /etc/systemd/system/prsm.service ]; then
+        echo -e "${RED}${BOLD}PRSM does not appear to be installed.${RESET}"
+        echo ""
+        echo "Expected:"
+        echo "  Directory: $INSTALL_DIR"
+        echo "  Service:   /etc/systemd/system/prsm.service"
+        echo ""
+        echo "To install PRSM for the first time, run:"
+        echo "  sudo bash setup.sh"
+        exit 1
+    fi
+    ok "PRSM installation found at $INSTALL_DIR"
+
+    ok "Pulling latest code..."
+    git -C "$INSTALL_DIR" pull
+    NEW_COMMIT=$(git -C "$INSTALL_DIR" rev-parse --short HEAD)
+    ok "Updated to commit: $NEW_COMMIT"
+
+    ok "Updating Python packages..."
+    pip3 install \
+        fastapi uvicorn clickhouse-connect python-multipart \
+        openpyxl "passlib[bcrypt]" python-dotenv bcrypt \
+        --break-system-packages --quiet
+    ok "Python packages up to date"
+
+    ok "Building frontend..."
+    cd "$INSTALL_DIR/frontend" && npm install --silent && npm run build
+    cd "$INSTALL_DIR"
+    ok "Frontend built"
+
+    chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR/backend/static"
+    ok "Static file ownership set to $SERVICE_USER"
+
+    ok "Restarting prsm service..."
+    systemctl restart prsm
+    sleep 3
+
+    if systemctl is-active --quiet prsm; then
+        ok "prsm service is active"
+    else
+        echo ""
+        echo -e "${RED}${BOLD}Service failed to start after update. Recent logs:${RESET}"
+        journalctl -u prsm --no-pager -n 30 2>/dev/null || true
+        die "prsm service did not start — check logs above"
+    fi
+
+    echo ""
+    echo -e "${GREEN}${BOLD}═══════════════════════════════════════════${RESET}"
+    echo -e "${GREEN}${BOLD} PRSM UPDATE COMPLETE${RESET}"
+    echo -e "${GREEN}${BOLD}═══════════════════════════════════════════${RESET}"
+    echo -e " Commit:   ${BOLD}${NEW_COMMIT}${RESET}"
+    echo -e " Install:  ${BOLD}${INSTALL_DIR}${RESET}"
+    echo -e " Service:  ${BOLD}prsm.service (active)${RESET}"
+    echo -e "${GREEN}${BOLD}═══════════════════════════════════════════${RESET}"
+    echo ""
+    exit 0
 fi
 
 # ── Section 1: Pre-flight checks ─────────────────────────────────────────────
