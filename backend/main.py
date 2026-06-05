@@ -8,7 +8,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from dotenv import load_dotenv
-from passlib.hash import bcrypt
+import bcrypt as bcrypt_lib
 
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
 
@@ -76,7 +76,7 @@ def login(request: Request, body: dict):
     ok_user = secrets.compare_digest(username.encode(), GUI_USERNAME.encode())
     ok_pass = False
     try:
-        ok_pass = bcrypt.verify(password, GUI_PASSWORD_HASH)
+        ok_pass = bcrypt_lib.checkpw(password.encode(), GUI_PASSWORD_HASH.encode())
     except Exception:
         ok_pass = False
 

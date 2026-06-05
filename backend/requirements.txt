@@ -2,4 +2,4 @@ fastapi
 uvicorn[standard]
 clickhouse-connect
 python-dotenv
-passlib[bcrypt]
+bcrypt
