@@ -441,6 +441,13 @@ export default function Dashboard() {
       .catch(() => setError('Could not load datasets'))
   }, [])
 
+  const targetChips      = chips.filter(c => c.type === 'target'   && !c.negate)
+  const notTargetChips   = chips.filter(c => c.type === 'target'   &&  c.negate)
+  const scoreChips       = chips.filter(c => c.type === 'score'    && !c.negate)
+  const notScoreChips    = chips.filter(c => c.type === 'score'    &&  c.negate)
+  const categoryChips    = chips.filter(c => c.type === 'category' && !c.negate)
+  const notCategoryChips = chips.filter(c => c.type === 'category' &&  c.negate)
+
   const params = {
     dataset,
     min_score: minScore,
@@ -454,17 +461,28 @@ export default function Dashboard() {
     show_suppressed: showSuppressed === true ? true : undefined,
   }
 
+  const chartParams = {
+    ...params,
+    targets:              targetChips.map(c => c.value).join(',') || undefined,
+    not_targets:          notTargetChips.length    ? notTargetChips.map(c => c.value).join(',')    : undefined,
+    score_filters:        scoreChips.length         ? scoreChips.map(c => c.value).join(',')        : undefined,
+    not_score_filters:    notScoreChips.length      ? notScoreChips.map(c => c.value).join(',')     : undefined,
+    category_filters:     categoryChips.length      ? categoryChips.map(c => c.value).join(',')     : undefined,
+    not_category_filters: notCategoryChips.length   ? notCategoryChips.map(c => c.value).join(',')  : undefined,
+    and_mode:             andMode === true ? true : undefined,
+  }
+
   useEffect(() => {
     if (!dataset) return
     setLoading(true); setError(null)
     Promise.all([
       axios.get('/api/dashboard', { ...auth, params }),
-      axios.get('/api/charts',   { ...auth, params }),
+      axios.get('/api/charts',   { ...auth, params: chartParams }),
     ])
       .then(([dash, charts]) => { setData(dash.data); setChartData(charts.data) })
       .catch(() => setError('Failed to load dashboard'))
       .finally(() => setLoading(false))
-  }, [dataset, minScore, maxScore, dateRangeHours, customDateFrom, customDateTo, beaconType, threatIntelOnly, protocol, showSuppressed, refreshKey])
+  }, [dataset, minScore, maxScore, dateRangeHours, customDateFrom, customDateTo, beaconType, threatIntelOnly, protocol, showSuppressed, refreshKey, chips, andMode])
 
   const handleApplyRange = (minDay, maxDay) => {
     setDateRangeHours('custom')

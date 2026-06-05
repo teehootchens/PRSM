@@ -2,6 +2,7 @@ from fastapi import APIRouter, Query
 from backend.db import get_client
 from backend.time_filter import time_condition
 from backend.suppression_filter import get_suppression_conditions
+from backend.routers.investigate import build_target_conditions, parse_score_filter, parse_category_filter
 from typing import Optional
 
 router = APIRouter(prefix="/api/charts", tags=["charts"])
@@ -18,6 +19,13 @@ def get_charts(
     threat_intel_only: bool = Query(False),
     protocol: Optional[str] = Query(None),
     show_suppressed: bool = Query(False),
+    targets: Optional[str] = Query(None),
+    not_targets: Optional[str] = Query(None),
+    score_filters: Optional[str] = Query(None),
+    not_score_filters: Optional[str] = Query(None),
+    category_filters: Optional[str] = Query(None),
+    not_category_filters: Optional[str] = Query(None),
+    and_mode: bool = Query(False),
 ):
     client = get_client()
     time_cond = time_condition(since_hours, date_from, date_to)
@@ -29,9 +37,52 @@ def get_charts(
     base_where = (" AND " + " AND ".join(base)) if base else ""
     ti_where = "AND threat_intel = true" if threat_intel_only else ""
     ms = min_score
-    ceiling = f" AND beacon_threat_score <= {max_score}" if max_score is not None else ""
+    ceiling = f" AND beacon_threat_score <= {max_score}" if max_score is not None and max_score < 1.0 else ""
 
-    inner_where = f"WHERE 1=1 {ti_where} {base_where} {time_cond} {supp_cond}"
+    # Build chip-based target and score/category conditions (mirrors investigate.py)
+    target_list = [t.strip() for t in targets.split(',') if t.strip()] if targets else []
+    not_list    = [t.strip() for t in not_targets.split(',') if t.strip()] if not_targets else []
+
+    score_conds = []
+    if score_filters:
+        for expr in score_filters.split(','):
+            cond = parse_score_filter(expr.strip())
+            if cond:
+                score_conds.append(cond)
+    if category_filters:
+        for expr in category_filters.split(','):
+            cond = parse_category_filter(expr.strip())
+            if cond:
+                score_conds.append(cond)
+
+    not_score_conds = []
+    if not_score_filters:
+        for expr in not_score_filters.split(','):
+            cond = parse_score_filter(expr.strip())
+            if cond:
+                not_score_conds.append(cond)
+    if not_category_filters:
+        for expr in not_category_filters.split(','):
+            cond = parse_category_filter(expr.strip())
+            if cond:
+                not_score_conds.append(cond)
+
+    if not target_list and not score_conds:
+        target_cond = ""
+    elif and_mode:
+        parts = [f"({build_target_conditions([t])})" for t in target_list]
+        parts += [f"({sc})" for sc in score_conds]
+        target_cond = "AND (" + " AND ".join(parts) + ")" if parts else ""
+    else:
+        ip_part = build_target_conditions(target_list) if target_list else None
+        or_parts = ([ip_part] if ip_part else []) + score_conds
+        target_cond = "AND (" + " OR ".join(or_parts) + ")" if or_parts else ""
+
+    not_parts = [f"NOT ({build_target_conditions([t])})" for t in not_list]
+    not_parts += [f"NOT ({c})" for c in not_score_conds]
+    not_cond = ("AND " + " AND ".join(not_parts)) if not_parts else ""
+
+    inner_where = f"WHERE 1=1 {ti_where} {target_cond} {not_cond} {base_where} {time_cond} {supp_cond}"
     empty = {"trend": [], "distribution": {"critical": 0, "high": 0, "medium": 0, "low": 0}}
 
     try:
