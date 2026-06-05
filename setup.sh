@@ -301,8 +301,27 @@ path = os.environ['COMPOSE_FILE']
 with open(path) as f:
     content = f.read()
 
-if '8123:8123' in content:
+# Only consider the port bound if it appears on an uncommented line
+active = any(
+    '8123:8123' in line
+    for line in content.splitlines()
+    if not line.lstrip().startswith('#')
+)
+if active:
     print("already_bound")
+    exit(0)
+
+# If 8123:8123 exists but is commented out, uncomment it
+# Handles RITA v5.1.2 format: #   - 127.0.0.1:8123:8123 (with leading whitespace)
+uncommented = re.sub(
+    r'^\s*#\s*-\s*127\.0\.0\.1:8123:8123\s*$',
+    '      - 127.0.0.1:8123:8123',
+    content, flags=re.MULTILINE
+)
+if uncommented != content:
+    with open(path, 'w') as f:
+        f.write(uncommented)
+    print("port_uncommented")
     exit(0)
 
 # Try to insert after an existing ports: key inside the clickhouse service block
