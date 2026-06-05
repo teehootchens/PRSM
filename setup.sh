@@ -258,9 +258,13 @@ fi
 if [ ! -d "$RITA_DIR" ]; then
     fail "RITA not found at $RITA_DIR — set RITA_DIR= to override"
 else
-    # Detect RITA version from docker-compose.yml image tag
+    # Detect RITA version — try CLI first, then docker-compose.yml image tag, then docker inspect
     rita_ver=""
-    if [ -f "$RITA_DIR/docker-compose.yml" ]; then
+    if command -v rita &>/dev/null; then
+        # Output format: "RITA version v5.1.2"
+        rita_ver=$(rita --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.?[0-9]*' | grep -oE '[0-9]+\.[0-9]+\.?[0-9]*' | head -1 || true)
+    fi
+    if [ -z "$rita_ver" ] && [ -f "$RITA_DIR/docker-compose.yml" ]; then
         rita_ver=$(grep -Ei "image:.*rita" "$RITA_DIR/docker-compose.yml" 2>/dev/null \
             | grep -oE '[0-9]+\.[0-9]+\.?[0-9]*' | head -1 || true)
     fi
