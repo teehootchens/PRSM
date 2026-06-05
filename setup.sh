@@ -170,6 +170,12 @@ if $UNINSTALL; then
     if $KEEP_DATA; then
         echo -e "  Preserved files are at: ${BOLD}/tmp/prsm-backup/${RESET}"
     fi
+    echo ""
+    echo -e "${BOLD}To reinstall PRSM:${RESET}"
+    echo "  sudo mkdir -p ${INSTALL_DIR}"
+    echo "  sudo chown \$USER:\$USER ${INSTALL_DIR}"
+    echo "  git clone https://github.com/teehootchens/PRSM.git ${INSTALL_DIR}"
+    echo "  cd ${INSTALL_DIR} && sudo bash setup.sh"
     exit 0
 fi
 
