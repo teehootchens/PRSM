@@ -79,7 +79,7 @@ Primary use cases:
 │   │       ├── ThreatIntel.jsx
 │   │       └── Whitelist.jsx
 │   └── index.html
-├── setup.sh                  # One-command installer
+├── prsm                      # CLI tool — install, update, uninstall
 ├── .env                      # Secrets — never committed
 ├── .gitignore
 ├── whitelist.db              # SQLite — never committed

@@ -13,24 +13,24 @@
 #   - offline_packages/
 #   - frontend/node_modules/
 # to the target server and run:
-#   sudo bash setup.sh --offline
+#   sudo prsm --install --offline
 #
 # To update an existing PRSM installation in-place:
-#   sudo bash setup.sh --update
+#   sudo prsm --update
 #
 # To check for available updates (report only, no changes):
-#   sudo bash setup.sh --check-updates
+#   sudo prsm --check-updates
 #   (note: RITA and Node.js version checks require internet access;
 #    in offline mode those checks are skipped)
 #
 # To update individual components:
-#   sudo bash setup.sh --python-update  — upgrade PRSM Python packages only
-#   sudo bash setup.sh --nginx-update   — update nginx via apt
-#   sudo bash setup.sh --docker-update  — update Docker (briefly restarts containers)
-#   sudo bash setup.sh --node-update    — update Node.js LTS and rebuild frontend
-#                                         (requires internet; skipped in offline mode)
-#   sudo bash setup.sh --rita-update    — print manual RITA update instructions
-#                                         (GitHub version check skipped in offline mode)
+#   sudo prsm --python-update  — upgrade PRSM Python packages only
+#   sudo prsm --nginx-update   — update nginx via apt
+#   sudo prsm --docker-update  — update Docker (briefly restarts containers)
+#   sudo prsm --node-update    — update Node.js LTS and rebuild frontend
+#                                (requires internet; skipped in offline mode)
+#   sudo prsm --rita-update    — print manual RITA update instructions
+#                                (GitHub version check skipped in offline mode)
 # ============================================================
 set -e
 
@@ -60,6 +60,46 @@ PYTHON_MIN="3.10"
 NODE_MIN="18"
 RITA_MIN="5.1"
 
+# ── Help ─────────────────────────────────────────────────────────────────────
+show_help() {
+  echo ""
+  echo "  PRSM — Pattern Recognition and Scoring Matrix"
+  echo ""
+  echo "  Usage: prsm [command]"
+  echo ""
+  echo "  Commands:"
+  echo "    --install                Install PRSM on this server"
+  echo "    --uninstall              Remove PRSM from this server"
+  echo "    --uninstall --keep-data  Uninstall but preserve .env and whitelist.db"
+  echo "    --update                 Pull latest PRSM code and rebuild"
+  echo "    --check-updates          Check all components for available updates"
+  echo "    --python-update          Upgrade PRSM Python dependencies"
+  echo "    --nginx-update           Upgrade nginx"
+  echo "    --docker-update          Upgrade Docker"
+  echo "    --node-update            Upgrade Node.js to latest LTS and rebuild frontend"
+  echo "    --rita-update            Show RITA update instructions (manual process)"
+  echo ""
+  echo "  Options:"
+  echo "    --offline                Add to --install for offline deployment"
+  echo "    --force                  Add to --install to overwrite existing .env and SSL cert"
+  echo ""
+  echo "  Examples:"
+  echo "    sudo prsm --install"
+  echo "    sudo prsm --install --offline"
+  echo "    sudo prsm --update"
+  echo "    sudo prsm --check-updates"
+  echo "    sudo prsm --uninstall --keep-data"
+  echo ""
+  echo "  Run 'sudo prsm --install' to get started."
+  echo ""
+}
+
+# Show help if no arguments or help flag
+if [[ $# -eq 0 ]] || [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
+  show_help
+  exit 0
+fi
+
 # ── Flag parsing ─────────────────────────────────────────────────────────────
 OFFLINE=false
 FORCE=false
@@ -72,6 +112,7 @@ NGINX_UPDATE=false
 DOCKER_UPDATE=false
 NODE_UPDATE=false
 RITA_UPDATE=false
+INSTALL=false
 
 for arg in "$@"; do
     case "$arg" in
@@ -86,7 +127,8 @@ for arg in "$@"; do
         --docker-update)  DOCKER_UPDATE=true ;;
         --node-update)    NODE_UPDATE=true ;;
         --rita-update)    RITA_UPDATE=true ;;
-        *)  echo -e "${RED}Unknown flag: $arg${RESET}"; echo "Usage: sudo bash setup.sh [--offline] [--force] [--uninstall] [--keep-data] [--update] [--check-updates] [--python-update] [--nginx-update] [--docker-update] [--node-update] [--rita-update]"; exit 1 ;;
+        --install)        INSTALL=true ;;
+        *)  echo -e "${RED}Unknown flag: $arg${RESET}"; show_help; exit 1 ;;
     esac
 done
 
@@ -133,6 +175,7 @@ if $UNINSTALL; then
     echo "  • $SERVICE_USER system account"
     echo "  • /etc/sudoers.d/prsm-build"
     echo "  • $INSTALL_DIR"
+    echo "  • /usr/local/bin/prsm"
     echo ""
     echo "The following will NOT be removed:"
     echo "  • nginx (may be used by other services)"
@@ -194,6 +237,9 @@ if $UNINSTALL; then
 
     rm -f /etc/sudoers.d/prsm-build
     ok "Removed sudoers entry"
+
+    rm -f /usr/local/bin/prsm
+    ok "Removed prsm command from /usr/local/bin"
     set -e
 
     echo ""
@@ -206,16 +252,16 @@ if $UNINSTALL; then
     echo "  sudo mkdir -p ${INSTALL_DIR}"
     echo "  sudo chown \$USER:\$USER ${INSTALL_DIR}"
     echo "  git clone https://github.com/teehootchens/PRSM.git ${INSTALL_DIR}"
-    echo "  cd ${INSTALL_DIR} && sudo bash setup.sh"
+    echo "  cd ${INSTALL_DIR} && sudo prsm --install"
     echo ""
     echo -e "${BOLD}To update an existing installation in the future:${RESET}"
-    echo "  sudo bash ${INSTALL_DIR}/setup.sh --update"
+    echo "  sudo prsm --update"
     exit 0
 fi
 
 # ── Root check (early, before anything else) ─────────────────────────────────
 if [ "$EUID" -ne 0 ]; then
-    die "This script must be run as root. Use: sudo bash setup.sh"
+    die "This script must be run as root. Use: sudo prsm <command>"
 fi
 
 # ── Check Updates ─────────────────────────────────────────────────────────────
@@ -235,7 +281,7 @@ if $CHECK_UPDATES; then
             warn "PRSM — could not compare commits (fetch may have failed)"
             PRSM_STATUS="⚠ check failed"
         elif [ "$LOCAL_HASH" != "$REMOTE_HASH" ]; then
-            echo -e "  ${YELLOW}⚠${RESET}  PRSM update available — run: ${BOLD}sudo bash setup.sh --update${RESET}"
+            echo -e "  ${YELLOW}⚠${RESET}  PRSM update available — run: ${BOLD}sudo prsm --update${RESET}"
             PRSM_STATUS="⚠ update available"
         else
             SHORT="${LOCAL_HASH:0:7}"
@@ -357,7 +403,7 @@ if $CHECK_UPDATES; then
     printf " %-14s %s\n" "Node.js"     "$NODE_STATUS"
     echo -e "${BOLD}═══════════════════════════════════════════${RESET}"
     echo ""
-    echo "Run 'sudo bash setup.sh --check-updates' anytime to recheck."
+    echo "Run 'sudo prsm --check-updates' anytime to recheck."
     echo ""
     exit 0
 fi
@@ -374,7 +420,7 @@ if $UPDATE; then
         echo "  Service:   /etc/systemd/system/prsm.service"
         echo ""
         echo "To install PRSM for the first time, run:"
-        echo "  sudo bash setup.sh"
+        echo "  sudo prsm --install"
         exit 1
     fi
     ok "PRSM installation found at $INSTALL_DIR"
@@ -427,7 +473,7 @@ fi
 # ── Python package update ─────────────────────────────────────────────────────
 if $PYTHON_UPDATE; then
     if [ "$EUID" -ne 0 ]; then
-        die "This script must be run as root. Use: sudo bash setup.sh --python-update"
+        die "This script must be run as root. Use: sudo prsm --python-update"
     fi
     section "PYTHON PACKAGE UPDATE"
     ok "Upgrading PRSM Python packages..."
@@ -458,7 +504,7 @@ fi
 # ── nginx update ──────────────────────────────────────────────────────────────
 if $NGINX_UPDATE; then
     if [ "$EUID" -ne 0 ]; then
-        die "This script must be run as root. Use: sudo bash setup.sh --nginx-update"
+        die "This script must be run as root. Use: sudo prsm --nginx-update"
     fi
     section "NGINX UPDATE"
     ok "Updating nginx via apt..."
@@ -479,7 +525,7 @@ fi
 # ── Docker update ─────────────────────────────────────────────────────────────
 if $DOCKER_UPDATE; then
     if [ "$EUID" -ne 0 ]; then
-        die "This script must be run as root. Use: sudo bash setup.sh --docker-update"
+        die "This script must be run as root. Use: sudo prsm --docker-update"
     fi
     section "DOCKER UPDATE"
     echo ""
@@ -528,7 +574,7 @@ fi
 # ── Node.js update ────────────────────────────────────────────────────────────
 if $NODE_UPDATE; then
     if [ "$EUID" -ne 0 ]; then
-        die "This script must be run as root. Use: sudo bash setup.sh --node-update"
+        die "This script must be run as root. Use: sudo prsm --node-update"
     fi
     section "NODE.JS UPDATE"
     if $OFFLINE; then
@@ -567,7 +613,7 @@ fi
 # ── RITA update ───────────────────────────────────────────────────────────────
 if $RITA_UPDATE; then
     if [ "$EUID" -ne 0 ]; then
-        die "This script must be run as root. Use: sudo bash setup.sh --rita-update"
+        die "This script must be run as root. Use: sudo prsm --rita-update"
     fi
     section "RITA UPDATE"
 
@@ -600,13 +646,20 @@ if $RITA_UPDATE; then
     echo -e "  To update RITA, follow the official release notes:"
     echo -e "  https://github.com/activecm/rita/releases"
     echo ""
-    echo -e "  After updating RITA, run: sudo bash setup.sh --check-updates"
+    echo -e "  After updating RITA, run: sudo prsm --check-updates"
     echo -e "  to verify all components are current."
     echo ""
     exit 0
 fi
 
 # ── Section 1: Pre-flight checks ─────────────────────────────────────────────
+# Trigger install if --install was passed, or if no action flag triggered an early exit above
+if ! $INSTALL && ! $UNINSTALL && ! $UPDATE && ! $CHECK_UPDATES && \
+   ! $PYTHON_UPDATE && ! $NGINX_UPDATE && ! $DOCKER_UPDATE && \
+   ! $NODE_UPDATE && ! $RITA_UPDATE; then
+    INSTALL=true
+fi
+
 section "1 — PRE-FLIGHT CHECKS"
 
 # Tracking arrays for deferred error reporting
@@ -1007,7 +1060,7 @@ else
         "import bcrypt, os; pw = os.environ['GUI_PASSWORD'].encode(); print(bcrypt.hashpw(pw, bcrypt.gensalt(rounds=12)).decode())")
 
     cat > "$INSTALL_DIR/.env" << ENV_EOF
-# Generated by setup.sh on $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+# Generated by prsm on $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 CLICKHOUSE_HOST=${CLICKHOUSE_HOST}
 CLICKHOUSE_PORT=${CLICKHOUSE_PORT}
 CLICKHOUSE_USER=${CLICKHOUSE_USER}
@@ -1267,6 +1320,11 @@ if [ "$http_code" = "200" ]; then
 else
     warn "Health check returned HTTP $http_code — service may still be starting"
 fi
+
+# ── Install prsm command globally ────────────────────────────────────────────
+cp "$(readlink -f "${BASH_SOURCE[0]}")" /usr/local/bin/prsm
+chmod +x /usr/local/bin/prsm
+ok "prsm command installed globally — run 'prsm --help' from anywhere"
 
 # ── Success banner ────────────────────────────────────────────────────────────
 echo ""

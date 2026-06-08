@@ -72,20 +72,20 @@ cd /opt/rita && docker compose up -d clickhouse
 curl http://localhost:8123/ping  # should return: Ok.
 ```
 
-> `setup.sh` auto-detects when ClickHouse is running in Docker but not bound to localhost and will patch `docker-compose.yml` and restart the container automatically.
+> `prsm` auto-detects when ClickHouse is running in Docker but not bound to localhost and will patch `docker-compose.yml` and restart the container automatically.
 
 ---
 
 ## Deployment
 
-`setup.sh` is the primary install method. Run it from the PRSM repo directory on the RITA server:
+`prsm` is the primary install method. Run it from the PRSM repo directory on the RITA server:
 
 ```bash
 cd /opt/PRSM
-sudo bash setup.sh
+sudo prsm --install
 ```
 
-The script runs as root and handles everything: pre-flight checks, dependency installs, `prsm` service account creation, interactive `.env` setup (prompts for GUI username and password, generates bcrypt hash and token secret automatically), suppression database initialization, frontend build, self-signed SSL certificate generation, Nginx site configuration, systemd service installation and startup, ufw firewall rules, sudoers entry for build operations, and a final health check. PRSM is accessible at `https://<server-ip>` immediately after the script completes.
+The script runs as root and handles everything: pre-flight checks, dependency installs, `prsm` service account creation, interactive `.env` setup (prompts for GUI username and password, generates bcrypt hash and token secret automatically), suppression database initialization, frontend build, self-signed SSL certificate generation, Nginx site configuration, systemd service installation and startup, ufw firewall rules, sudoers entry for build operations, and a final health check. PRSM is accessible at `https://<server-ip>` immediately after the script completes. The `prsm` command is also installed to `/usr/local/bin/prsm` so it can be run from anywhere.
 
 > Accept the browser certificate warning — this is expected for a self-signed cert.
 
@@ -93,13 +93,15 @@ The script runs as root and handles everything: pre-flight checks, dependency in
 
 | Flag | What it does |
 |---|---|
-| (none) | Standard install — downloads Nginx, Python packages, and npm dependencies |
-| `--offline` | Skip all downloads; requires pre-staged packages. See [Offline bundle preparation](#offline-bundle-preparation). |
-| `--force` | Overwrite an existing `.env` and SSL certificate. Use when re-running after a partial install. |
-| `--uninstall` | Remove PRSM: stops and disables the service, removes the systemd unit, Nginx site config, SSL certs, `prsm` service account, sudoers entry, and `/opt/PRSM`. Does **not** remove Nginx, Python packages, ufw rules, or RITA. |
+| `--install` | Standard install — downloads Nginx, Python packages, and npm dependencies |
+| `--install --offline` | Skip all downloads; requires pre-staged packages. See [Offline bundle preparation](#offline-bundle-preparation). |
+| `--install --force` | Overwrite an existing `.env` and SSL certificate. Use when re-running after a partial install. |
+| `--uninstall` | Remove PRSM: stops and disables the service, removes the systemd unit, Nginx site config, SSL certs, `prsm` service account, sudoers entry, `/opt/PRSM`, and `/usr/local/bin/prsm`. Does **not** remove Nginx, Python packages, ufw rules, or RITA. |
 | `--uninstall --keep-data` | Same as `--uninstall` but saves `.env` and `whitelist.db` to `/tmp/prsm-backup/` before deletion. |
+| `--update` | Pull latest PRSM code, update Python packages, rebuild frontend, restart service. |
+| `--check-updates` | Check all components for available updates (report only, no changes). |
 
-> Always invoke as `sudo bash setup.sh`, not `sudo ./setup.sh` — the `SUDO_USER` variable is used internally to configure build permissions for the invoking account.
+> Always invoke as `sudo prsm --install` — the `SUDO_USER` variable is used internally to configure build permissions for the invoking account.
 
 ### Offline bundle preparation
 
@@ -117,7 +119,7 @@ cd frontend && npm install && cd ..
 # including offline_packages/ and frontend/node_modules/
 
 # On the target server:
-sudo bash setup.sh --offline
+sudo prsm --install --offline
 ```
 
 In offline mode, the script validates that all Python packages are already importable and that `frontend/node_modules/` is present, then proceeds without any downloads.
@@ -126,7 +128,7 @@ In offline mode, the script validates that all Python packages are already impor
 
 ## Advanced / Manual Install
 
-The steps below document what `setup.sh` performs internally, for reference or customization.
+The steps below document what `prsm --install` performs internally, for reference or customization.
 
 ### 0. Set deployment variables
 
