@@ -38,7 +38,7 @@ Primary use cases:
 ```
 /opt/PRSM/
 ├── backend/
-│   ├── main.py               # FastAPI app, auth, router registration
+│   ├── main.py               # FastAPI app, auth, router registration, /api/version (public)
 │   ├── db.py                 # ClickHouse connection
 │   ├── suppression_filter.py # SQLite suppression logic
 │   ├── static/               # Built frontend (Vite output)
@@ -79,7 +79,13 @@ Primary use cases:
 │   │       ├── ThreatIntel.jsx
 │   │       └── Whitelist.jsx
 │   └── index.html
-├── prsm                      # CLI tool — install, update, uninstall
+├── prsm                      # CLI tool — all server management commands:
+│                             #   --install, --uninstall [--keep-data]
+│                             #   --update, --check-updates
+│                             #   --inject-test-data
+│                             #   --python-update, --nginx-update, --docker-update
+│                             #   --node-update, --rita-update
+│                             #   --install --offline, --install --force
 ├── .env                      # Secrets — never committed
 ├── .gitignore
 ├── whitelist.db              # SQLite — never committed
@@ -118,6 +124,10 @@ Primary use cases:
 - **Shared Hosts view** — enabled when exactly one non-negated target chip is active; calls `/api/investigate/shared-hosts`; "Investigate all sources" button adds all returned IPs as OR-mode chips
 - **Category badges** in `CategoryBadge` component use threshold `>= 0.25` (25%); category keyword chips filter server-side at `> 0`
 - **Chip types**: `target` (IP/CIDR/FQDN), `score` (e.g. `beacon>75`), `category` (bare keyword like `intel`)
+
+### Version Endpoint
+- `GET /api/version` in `main.py` — **no auth required**; reads `version` from `frontend/package.json` at startup, returns `{ "version": "x.y.z" }` or `"unknown"` on read failure
+- Fetched by `Login.jsx` and `MasterDashboard.jsx` on mount to display the version string
 
 ### Frontend State
 - Dataset selection: `DatasetContext`
@@ -209,6 +219,7 @@ python3 -c "from passlib.hash import bcrypt; print(bcrypt.hash('yourpassword'))"
 - Git operations as root will fail with "dubious ownership" — use `your-username` or `sudo -u prsm git`
 - The `prsm` user owns `/opt/PRSM` at runtime but `your-username` is the dev user
 - Nginx `limit_req_zone` lives in `/etc/nginx/nginx.conf` http block — do not add it to the site config too
+- `MasterDashboard.jsx` update banner still says `sudo bash setup.sh --update` — needs updating to `sudo prsm --update`
 
 ---
 

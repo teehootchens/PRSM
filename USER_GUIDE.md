@@ -45,6 +45,8 @@ The core workflow is:
 
 Navigate to `https://<server-ip>` and log in with your credentials. The browser will warn about a self-signed certificate — this is expected. PRSM uses a locally-issued cert to encrypt traffic on the LAN.
 
+The current PRSM version is displayed at the bottom of the login page, below the **PATTERN RECOGNITION AND SCORING MATRIX** subtitle.
+
 Your session is stored in `sessionStorage`, which means it persists across page refreshes within the same tab but is cleared when you close the tab. This is intentional — closing the browser ends your session without requiring an explicit logout.
 
 ### Master Dashboard and dataset selection
@@ -84,6 +86,10 @@ The left sidebar also shows an **active filters badge** when filters are set, li
 ### Master Dashboard
 
 The Master Dashboard is the entry point after login. It shows all available RITA datasets before any dataset is selected, giving analysts an immediate cross-dataset overview without entering a specific dataset first.
+
+**Update available banner** — If a PRSM git update is detected on load, an amber banner appears at the top of the page with the command to run (`sudo prsm --update`). Click **✕** to dismiss it for the current session. It reappears on the next login if the update is still pending.
+
+**Version** — The current PRSM version is displayed in the bottom-right corner of the page in small muted text.
 
 **Dataset cards** — One card per RITA dataset. Each card shows:
 - Dataset name

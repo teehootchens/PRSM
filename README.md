@@ -78,30 +78,43 @@ curl http://localhost:8123/ping  # should return: Ok.
 
 ## Deployment
 
-`prsm` is the primary install method. Run it from the PRSM repo directory on the RITA server:
+`prsm` is the primary install method. On a fresh server, `prsm` is not yet in `PATH`, so run it directly using `bash` from the cloned repo directory:
 
 ```bash
 cd /opt/PRSM
-sudo prsm --install
+sudo bash prsm --install
 ```
 
-The script runs as root and handles everything: pre-flight checks, dependency installs, `prsm` service account creation, interactive `.env` setup (prompts for GUI username and password, generates bcrypt hash and token secret automatically), suppression database initialization, frontend build, self-signed SSL certificate generation, Nginx site configuration, systemd service installation and startup, ufw firewall rules, sudoers entry for build operations, and a final health check. PRSM is accessible at `https://<server-ip>` immediately after the script completes. The `prsm` command is also installed to `/usr/local/bin/prsm` so it can be run from anywhere.
+The installer copies `prsm` to `/usr/local/bin` at the end of the install. After that, all subsequent commands can be run from anywhere without `bash`:
+
+```bash
+sudo prsm --update
+sudo prsm --check-updates
+```
+
+The script runs as root and handles everything: pre-flight checks, dependency installs, `prsm` service account creation, interactive `.env` setup (prompts for GUI username and password, generates bcrypt hash and token secret automatically), suppression database initialization, frontend build, self-signed SSL certificate generation, Nginx site configuration, systemd service installation and startup, ufw firewall rules, sudoers entry for build operations, and a final health check. PRSM is accessible at `https://<server-ip>` immediately after the script completes.
 
 > Accept the browser certificate warning — this is expected for a self-signed cert.
 
-### Flags
+### CLI Commands
 
-| Flag | What it does |
+| Command | Description |
 |---|---|
-| `--install` | Standard install — downloads Nginx, Python packages, and npm dependencies |
-| `--install --offline` | Skip all downloads; requires pre-staged packages. See [Offline bundle preparation](#offline-bundle-preparation). |
-| `--install --force` | Overwrite an existing `.env` and SSL certificate. Use when re-running after a partial install. |
-| `--uninstall` | Remove PRSM: stops and disables the service, removes the systemd unit, Nginx site config, SSL certs, `prsm` service account, sudoers entry, `/opt/PRSM`, and `/usr/local/bin/prsm`. Does **not** remove Nginx, Python packages, ufw rules, or RITA. |
-| `--uninstall --keep-data` | Same as `--uninstall` but saves `.env` and `whitelist.db` to `/tmp/prsm-backup/` before deletion. |
-| `--update` | Pull latest PRSM code, update Python packages, rebuild frontend, restart service. |
-| `--check-updates` | Check all components for available updates (report only, no changes). |
+| `prsm --install` | Install PRSM on this server |
+| `prsm --uninstall` | Remove PRSM from this server |
+| `prsm --uninstall --keep-data` | Uninstall but preserve `.env` and `whitelist.db` to `/tmp/prsm-backup/` |
+| `prsm --update` | Pull latest PRSM code, update Python packages, rebuild frontend, restart service |
+| `prsm --check-updates` | Check all components for available updates (report only, no changes) |
+| `prsm --inject-test-data` | Inject ~2,000 rows of synthetic test data into a ClickHouse dataset |
+| `prsm --python-update` | Upgrade PRSM Python dependencies |
+| `prsm --nginx-update` | Upgrade nginx via apt |
+| `prsm --docker-update` | Upgrade Docker (briefly restarts containers) |
+| `prsm --node-update` | Upgrade Node.js to latest LTS and rebuild frontend |
+| `prsm --rita-update` | Show RITA update instructions (manual process) |
+| `prsm --install --offline` | Install without internet access; requires pre-staged packages. See [Offline bundle preparation](#offline-bundle-preparation). |
+| `prsm --install --force` | Overwrite an existing `.env` and SSL certificate |
 
-> Always invoke as `sudo prsm --install` — the `SUDO_USER` variable is used internally to configure build permissions for the invoking account.
+> Always invoke as `sudo prsm <command>`. On first install before `prsm` is in `PATH`, use `sudo bash prsm --install` from the repo directory.
 
 ### Offline bundle preparation
 
@@ -123,6 +136,33 @@ sudo prsm --install --offline
 ```
 
 In offline mode, the script validates that all Python packages are already importable and that `frontend/node_modules/` is present, then proceeds without any downloads.
+
+### Checking for updates
+
+```bash
+sudo prsm --check-updates
+```
+
+Reports the current status of all PRSM components — no changes are made. Checks:
+
+| Component | Method |
+|---|---|
+| PRSM | `git fetch` + commit comparison against `origin/main` |
+| RITA | GitHub Releases API (latest tag vs installed version) |
+| Python packages | `pip3 list --outdated` for PRSM dependencies |
+| nginx | `apt list --upgradable` |
+| Docker | `apt list --upgradable` |
+| Node.js | Installed major version vs latest LTS from NodeSource |
+
+The **Master Dashboard** also shows an amber banner at the top of the page if a PRSM git update is detected automatically on load. Click **✕** to dismiss it for the current session.
+
+### Injecting test data
+
+```bash
+sudo prsm --inject-test-data
+```
+
+Prompts for a dataset name (default: `sensor250`), warns about what will be created, requires confirmation, then injects approximately 2,000 rows of synthetic test data covering a full year. Useful for verifying a new installation or evaluating PRSM without real RITA data. To remove injected rows: `python3 /opt/PRSM/inject_test_data.py --delete`.
 
 ---
 
@@ -480,7 +520,8 @@ python3 -c "from passlib.hash import bcrypt; print(bcrypt.hash('yourpassword'))"
 - ClickHouse is never exposed to the LAN — backend queries over localhost only
 - `.env` and `whitelist.db` are never committed to git — back them up separately
 - Paths are dynamically resolved — no hardcoded `/opt/PRSM` references in code
-- Test data can be injected for evaluation: `python3 inject_test_data.py` (remove with `--delete`)
+- Test data can be injected for evaluation: `sudo prsm --inject-test-data` (interactive, prompts for dataset name). Remove injected rows with `python3 /opt/PRSM/inject_test_data.py --delete`
+- The current PRSM version (read from `frontend/package.json`) is displayed on the Login page and in the bottom-right corner of the Master Dashboard
 
 ---
 
