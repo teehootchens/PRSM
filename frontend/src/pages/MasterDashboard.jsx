@@ -136,6 +136,7 @@ export default function MasterDashboard() {
   const [updateDismissed, setUpdateDismissed] = useState(
     () => sessionStorage.getItem('prsm_update_dismissed') === '1'
   )
+  const [version, setVersion] = useState(null)
 
   useEffect(() => {
     // Dataset summary and update check run in parallel
@@ -149,6 +150,10 @@ export default function MasterDashboard() {
 
     axios.get('/api/updates/check', { headers: authHeader })
       .then(r => { if (r.data.update_available) setUpdateAvailable(true) })
+      .catch(() => {})
+
+    axios.get('/api/version')
+      .then(r => setVersion(r.data.version))
       .catch(() => {})
   }, [])
 
@@ -242,6 +247,15 @@ export default function MasterDashboard() {
           </div>
         )}
       </div>
+
+      {version && (
+        <div style={{
+          position: 'fixed', bottom: '1rem', right: '1.25rem',
+          fontSize: 11, color: '#475569', userSelect: 'none', pointerEvents: 'none',
+        }}>
+          PRSM v{version}
+        </div>
+      )}
     </div>
   )
 }

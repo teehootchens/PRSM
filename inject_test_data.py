@@ -8,6 +8,7 @@ Usage:
     python3 inject_test_data.py --delete   # remove all test rows
 """
 
+import os
 import sys
 import random
 import uuid
@@ -21,7 +22,7 @@ except ImportError:
     sys.exit(1)
 
 # ---- configurable ----
-DATASET = "sensor250"
+DATASET = os.environ.get("PRSM_TEST_DATASET", "sensor250")
 # ----------------------
 
 TABLE = f"{DATASET}.threat_mixtape"

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../AuthContext'
 import prsmLogo from '../assets/prsm-logo.svg'
 
@@ -8,6 +8,14 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [version, setVersion] = useState(null)
+
+  useEffect(() => {
+    fetch('/api/version')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d && setVersion(d.version))
+      .catch(() => {})
+  }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -85,10 +93,17 @@ export default function Login() {
         </form>
       </div>
 
-      <div style={{
-        fontSize: '0.8rem', letterSpacing: '0.25em', color: '#475569',
-        userSelect: 'none',
-      }}>PATTERN RECOGNITION AND SCORING MATRIX</div>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.3rem' }}>
+        <div style={{
+          fontSize: '0.8rem', letterSpacing: '0.25em', color: '#475569',
+          userSelect: 'none',
+        }}>PATTERN RECOGNITION AND SCORING MATRIX</div>
+        {version && (
+          <div style={{ fontSize: 11, color: '#475569', userSelect: 'none' }}>
+            PRSM v{version}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

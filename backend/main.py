@@ -3,6 +3,7 @@ import hmac
 import hashlib
 import time
 import os
+import json
 import logging
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.staticfiles import StaticFiles
@@ -11,6 +12,13 @@ from dotenv import load_dotenv
 import bcrypt as bcrypt_lib
 
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
+
+_PKG_JSON = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "package.json")
+try:
+    with open(_PKG_JSON) as _f:
+        _PRSM_VERSION = json.load(_f).get("version", "unknown")
+except Exception:
+    _PRSM_VERSION = "unknown"
 
 from backend.routers import (
     beaconing, datasets, longconns, dns, threatintel,
@@ -107,6 +115,10 @@ app.include_router(datasets.updates_router, dependencies=deps)
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+@app.get("/api/version")
+def version():
+    return {"version": _PRSM_VERSION}
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 app.mount("/assets", StaticFiles(directory=os.path.join(STATIC_DIR, "assets")), name="assets")

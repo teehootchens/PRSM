@@ -31,6 +31,9 @@
 #                                (requires internet; skipped in offline mode)
 #   sudo prsm --rita-update    — print manual RITA update instructions
 #                                (GitHub version check skipped in offline mode)
+#
+# To inject synthetic test data into ClickHouse for UI verification:
+#   sudo prsm --inject-test-data
 # ============================================================
 set -e
 
@@ -78,6 +81,7 @@ show_help() {
   echo "    --docker-update          Upgrade Docker"
   echo "    --node-update            Upgrade Node.js to latest LTS and rebuild frontend"
   echo "    --rita-update            Show RITA update instructions (manual process)"
+  echo "    --inject-test-data       Inject ~2,000 rows of synthetic test data into ClickHouse"
   echo ""
   echo "  Options:"
   echo "    --offline                Add to --install for offline deployment"
@@ -112,22 +116,24 @@ NGINX_UPDATE=false
 DOCKER_UPDATE=false
 NODE_UPDATE=false
 RITA_UPDATE=false
+INJECT_TEST_DATA=false
 INSTALL=false
 
 for arg in "$@"; do
     case "$arg" in
-        --offline)        OFFLINE=true ;;
-        --force)          FORCE=true ;;
-        --uninstall)      UNINSTALL=true ;;
-        --keep-data)      KEEP_DATA=true ;;
-        --update)         UPDATE=true ;;
-        --check-updates)  CHECK_UPDATES=true ;;
-        --python-update)  PYTHON_UPDATE=true ;;
-        --nginx-update)   NGINX_UPDATE=true ;;
-        --docker-update)  DOCKER_UPDATE=true ;;
-        --node-update)    NODE_UPDATE=true ;;
-        --rita-update)    RITA_UPDATE=true ;;
-        --install)        INSTALL=true ;;
+        --offline)           OFFLINE=true ;;
+        --force)             FORCE=true ;;
+        --uninstall)         UNINSTALL=true ;;
+        --keep-data)         KEEP_DATA=true ;;
+        --update)            UPDATE=true ;;
+        --check-updates)     CHECK_UPDATES=true ;;
+        --python-update)     PYTHON_UPDATE=true ;;
+        --nginx-update)      NGINX_UPDATE=true ;;
+        --docker-update)     DOCKER_UPDATE=true ;;
+        --node-update)       NODE_UPDATE=true ;;
+        --rita-update)       RITA_UPDATE=true ;;
+        --inject-test-data)  INJECT_TEST_DATA=true ;;
+        --install)           INSTALL=true ;;
         *)  echo -e "${RED}Unknown flag: $arg${RESET}"; show_help; exit 1 ;;
     esac
 done
@@ -652,11 +658,66 @@ if $RITA_UPDATE; then
     exit 0
 fi
 
+# ── Inject test data ──────────────────────────────────────────────────────────
+if $INJECT_TEST_DATA; then
+    section "INJECT TEST DATA"
+
+    # Check PRSM is installed
+    if [ ! -d "$INSTALL_DIR" ] || ! systemctl is-active --quiet prsm 2>/dev/null; then
+        echo -e "${RED}${BOLD}PRSM does not appear to be installed or running.${RESET}"
+        echo "  Expected directory: $INSTALL_DIR"
+        echo "  Expected service:   prsm.service (active)"
+        echo ""
+        echo "Run 'sudo prsm --install' to install PRSM first."
+        exit 1
+    fi
+    ok "PRSM installation found at $INSTALL_DIR"
+
+    # Check ClickHouse is reachable
+    if ! curl -sf --max-time 5 "http://${CLICKHOUSE_HOST}:${CLICKHOUSE_PORT}/ping" 2>/dev/null | grep -q "Ok"; then
+        echo -e "${RED}${BOLD}ClickHouse is not reachable at ${CLICKHOUSE_HOST}:${CLICKHOUSE_PORT}.${RESET}"
+        echo "Ensure RITA/ClickHouse containers are running: cd $RITA_DIR && docker compose up -d"
+        exit 1
+    fi
+    ok "ClickHouse reachable at ${CLICKHOUSE_HOST}:${CLICKHOUSE_PORT}"
+
+    # Prompt for dataset name
+    echo ""
+    read -r -p "  Dataset name to inject test data into [sensor250]: " INJECT_DATASET
+    INJECT_DATASET="${INJECT_DATASET:-sensor250}"
+    echo ""
+
+    # Warn about what will happen
+    echo -e "  ${YELLOW}⚠${RESET}  This will create the database and threat_mixtape table if they don't exist,"
+    echo -e "     then inject ~2,000 rows of synthetic test data."
+    echo -e "     Existing data is not affected."
+    echo ""
+
+    read -r -p "  Proceed? [y/N]: " INJECT_CONFIRM
+    if [[ ! "$INJECT_CONFIRM" =~ ^[Yy]$ ]]; then
+        echo "Aborted."
+        exit 0
+    fi
+    echo ""
+
+    ok "Injecting test data into dataset: $INJECT_DATASET"
+    if PRSM_TEST_DATASET="$INJECT_DATASET" python3 "$INSTALL_DIR/inject_test_data.py"; then
+        echo ""
+        echo -e "${GREEN}${BOLD}✓ Test data injected into ${INJECT_DATASET} — open PRSM to verify.${RESET}"
+    else
+        echo ""
+        echo -e "${RED}${BOLD}Test data injection failed — see output above.${RESET}"
+        exit 1
+    fi
+    echo ""
+    exit 0
+fi
+
 # ── Section 1: Pre-flight checks ─────────────────────────────────────────────
 # Trigger install if --install was passed, or if no action flag triggered an early exit above
 if ! $INSTALL && ! $UNINSTALL && ! $UPDATE && ! $CHECK_UPDATES && \
    ! $PYTHON_UPDATE && ! $NGINX_UPDATE && ! $DOCKER_UPDATE && \
-   ! $NODE_UPDATE && ! $RITA_UPDATE; then
+   ! $NODE_UPDATE && ! $RITA_UPDATE && ! $INJECT_TEST_DATA; then
     INSTALL=true
 fi
 
