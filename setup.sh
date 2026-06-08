@@ -22,6 +22,15 @@
 #   sudo bash setup.sh --check-updates
 #   (note: RITA and Node.js version checks require internet access;
 #    in offline mode those checks are skipped)
+#
+# To update individual components:
+#   sudo bash setup.sh --python-update  — upgrade PRSM Python packages only
+#   sudo bash setup.sh --nginx-update   — update nginx via apt
+#   sudo bash setup.sh --docker-update  — update Docker (briefly restarts containers)
+#   sudo bash setup.sh --node-update    — update Node.js LTS and rebuild frontend
+#                                         (requires internet; skipped in offline mode)
+#   sudo bash setup.sh --rita-update    — print manual RITA update instructions
+#                                         (GitHub version check skipped in offline mode)
 # ============================================================
 set -e
 
@@ -58,6 +67,11 @@ UNINSTALL=false
 KEEP_DATA=false
 UPDATE=false
 CHECK_UPDATES=false
+PYTHON_UPDATE=false
+NGINX_UPDATE=false
+DOCKER_UPDATE=false
+NODE_UPDATE=false
+RITA_UPDATE=false
 
 for arg in "$@"; do
     case "$arg" in
@@ -67,7 +81,12 @@ for arg in "$@"; do
         --keep-data)      KEEP_DATA=true ;;
         --update)         UPDATE=true ;;
         --check-updates)  CHECK_UPDATES=true ;;
-        *)  echo -e "${RED}Unknown flag: $arg${RESET}"; echo "Usage: sudo bash setup.sh [--offline] [--force] [--uninstall] [--keep-data] [--update] [--check-updates]"; exit 1 ;;
+        --python-update)  PYTHON_UPDATE=true ;;
+        --nginx-update)   NGINX_UPDATE=true ;;
+        --docker-update)  DOCKER_UPDATE=true ;;
+        --node-update)    NODE_UPDATE=true ;;
+        --rita-update)    RITA_UPDATE=true ;;
+        *)  echo -e "${RED}Unknown flag: $arg${RESET}"; echo "Usage: sudo bash setup.sh [--offline] [--force] [--uninstall] [--keep-data] [--update] [--check-updates] [--python-update] [--nginx-update] [--docker-update] [--node-update] [--rita-update]"; exit 1 ;;
     esac
 done
 
@@ -401,6 +420,188 @@ if $UPDATE; then
     echo -e " Install:  ${BOLD}${INSTALL_DIR}${RESET}"
     echo -e " Service:  ${BOLD}prsm.service (active)${RESET}"
     echo -e "${GREEN}${BOLD}═══════════════════════════════════════════${RESET}"
+    echo ""
+    exit 0
+fi
+
+# ── Python package update ─────────────────────────────────────────────────────
+if $PYTHON_UPDATE; then
+    if [ "$EUID" -ne 0 ]; then
+        die "This script must be run as root. Use: sudo bash setup.sh --python-update"
+    fi
+    section "PYTHON PACKAGE UPDATE"
+    ok "Upgrading PRSM Python packages..."
+    pip3 install --upgrade \
+        fastapi uvicorn clickhouse-connect python-multipart \
+        openpyxl "passlib[bcrypt]" python-dotenv bcrypt \
+        --break-system-packages
+    ok "Python packages upgraded"
+
+    ok "Restarting prsm service..."
+    systemctl restart prsm
+    sleep 3
+    if systemctl is-active --quiet prsm; then
+        ok "prsm service is active"
+    else
+        echo ""
+        echo -e "${RED}${BOLD}Service failed to start after update. Recent logs:${RESET}"
+        journalctl -u prsm --no-pager -n 20 2>/dev/null || true
+        die "prsm service did not start — check logs above"
+    fi
+
+    echo ""
+    echo -e "${GREEN}${BOLD}Python packages updated and prsm service restarted.${RESET}"
+    echo ""
+    exit 0
+fi
+
+# ── nginx update ──────────────────────────────────────────────────────────────
+if $NGINX_UPDATE; then
+    if [ "$EUID" -ne 0 ]; then
+        die "This script must be run as root. Use: sudo bash setup.sh --nginx-update"
+    fi
+    section "NGINX UPDATE"
+    ok "Updating nginx via apt..."
+    apt-get update -qq && apt-get upgrade -y nginx
+    ok "Reloading nginx..."
+    systemctl reload nginx
+    if systemctl is-active --quiet nginx; then
+        ok "nginx is active"
+    else
+        die "nginx is not active after update — check: systemctl status nginx"
+    fi
+    nginx_ver=$(nginx -v 2>&1 | grep -oE '[0-9]+\.[0-9]+\.?[0-9]*' | head -1 || true)
+    ok "nginx version after update: ${nginx_ver}"
+    echo ""
+    exit 0
+fi
+
+# ── Docker update ─────────────────────────────────────────────────────────────
+if $DOCKER_UPDATE; then
+    if [ "$EUID" -ne 0 ]; then
+        die "This script must be run as root. Use: sudo bash setup.sh --docker-update"
+    fi
+    section "DOCKER UPDATE"
+    echo ""
+    warn "Updating Docker will briefly restart all containers including RITA and ClickHouse"
+    echo ""
+    read -r -p "  Proceed? [y/N]: " DOCKER_CONFIRM
+    if [[ ! "$DOCKER_CONFIRM" =~ ^[Yy]$ ]]; then
+        echo "Aborted."
+        exit 0
+    fi
+    echo ""
+    ok "Updating Docker packages..."
+    apt-get update -qq && apt-get upgrade -y docker-ce docker-ce-cli containerd.io
+    ok "Restarting Docker..."
+    systemctl restart docker
+    ok "Waiting for ClickHouse to respond (up to 30 seconds)..."
+    ch_ready=false
+    for i in $(seq 1 15); do
+        sleep 2
+        if curl -sf --max-time 3 "http://127.0.0.1:8123/ping" 2>/dev/null | grep -q "Ok"; then
+            ch_ready=true
+            ok "ClickHouse is responding"
+            break
+        fi
+    done
+    if ! $ch_ready; then
+        warn "ClickHouse did not respond within 30 seconds — check: docker ps"
+    fi
+    ok "Restarting prsm service..."
+    systemctl restart prsm
+    sleep 3
+    if systemctl is-active --quiet prsm; then
+        ok "prsm service is active"
+    else
+        echo ""
+        echo -e "${RED}${BOLD}Service failed to start after update. Recent logs:${RESET}"
+        journalctl -u prsm --no-pager -n 20 2>/dev/null || true
+        die "prsm service did not start — check logs above"
+    fi
+    docker_ver=$(docker --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.?[0-9]*' | head -1 || true)
+    ok "Docker version after update: ${docker_ver}"
+    echo ""
+    exit 0
+fi
+
+# ── Node.js update ────────────────────────────────────────────────────────────
+if $NODE_UPDATE; then
+    if [ "$EUID" -ne 0 ]; then
+        die "This script must be run as root. Use: sudo bash setup.sh --node-update"
+    fi
+    section "NODE.JS UPDATE"
+    if $OFFLINE; then
+        warn "Node.js update requires internet access — skipping (offline mode)"
+        exit 0
+    fi
+    ok "Detecting latest Node.js LTS..."
+    NODE_LTS=$(curl -fsSL https://resolve.installnode.com/lts 2>/dev/null || echo "22")
+    ok "Latest LTS: v${NODE_LTS}"
+    ok "Installing Node.js ${NODE_LTS}.x from NodeSource..."
+    curl -fsSL "https://deb.nodesource.com/setup_${NODE_LTS}.x" | bash - 2>/dev/null
+    apt-get install -y -qq nodejs
+    node_ver=$(node --version 2>/dev/null || true)
+    ok "Node.js ${node_ver} installed"
+    ok "Rebuilding PRSM frontend..."
+    cd "$INSTALL_DIR/frontend" && npm install && npm run build
+    cd "$INSTALL_DIR"
+    ok "Frontend rebuilt"
+    chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR/backend/static"
+    ok "Static file ownership set to $SERVICE_USER"
+    ok "Restarting prsm service..."
+    systemctl restart prsm
+    sleep 3
+    if systemctl is-active --quiet prsm; then
+        ok "prsm service is active"
+    else
+        echo ""
+        echo -e "${RED}${BOLD}Service failed to start after update. Recent logs:${RESET}"
+        journalctl -u prsm --no-pager -n 20 2>/dev/null || true
+        die "prsm service did not start — check logs above"
+    fi
+    echo ""
+    exit 0
+fi
+
+# ── RITA update ───────────────────────────────────────────────────────────────
+if $RITA_UPDATE; then
+    if [ "$EUID" -ne 0 ]; then
+        die "This script must be run as root. Use: sudo bash setup.sh --rita-update"
+    fi
+    section "RITA UPDATE"
+
+    rita_installed=""
+    if command -v rita &>/dev/null; then
+        rita_installed=$(rita --version 2>/dev/null \
+            | grep -oE 'v[0-9]+\.[0-9]+\.?[0-9]*' | head -1 || true)
+    elif [ -f "$RITA_DIR/docker-compose.yml" ]; then
+        _rv=$(grep -Ei "image:.*rita" "$RITA_DIR/docker-compose.yml" 2>/dev/null \
+            | grep -oE '[0-9]+\.[0-9]+\.?[0-9]*' | head -1 || true)
+        [ -n "$_rv" ] && rita_installed="v${_rv}"
+    fi
+    [ -z "$rita_installed" ] && rita_installed="unknown"
+
+    if $OFFLINE; then
+        rita_latest="(internet required)"
+    else
+        rita_latest=$(curl -s --max-time 5 \
+            "https://api.github.com/repos/activecm/rita/releases/latest" 2>/dev/null \
+            | grep '"tag_name"' | grep -oE 'v[0-9]+\.[0-9]+\.?[0-9]*' | head -1 || true)
+        [ -z "$rita_latest" ] && rita_latest="(could not fetch)"
+    fi
+
+    echo ""
+    echo -e "  ${YELLOW}⚠${RESET} RITA updates must be performed manually to avoid data corruption."
+    echo ""
+    echo -e "  Installed: ${rita_installed}"
+    echo -e "  Latest:    ${rita_latest}"
+    echo ""
+    echo -e "  To update RITA, follow the official release notes:"
+    echo -e "  https://github.com/activecm/rita/releases"
+    echo ""
+    echo -e "  After updating RITA, run: sudo bash setup.sh --check-updates"
+    echo -e "  to verify all components are current."
     echo ""
     exit 0
 fi
