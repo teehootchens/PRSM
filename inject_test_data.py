@@ -341,7 +341,7 @@ def insert():
 
     print(f"\nDone. Inserted {total} total rows into {TABLE}")
     print(f"Incident weeks simulated: weeks {sorted(INCIDENT_WEEKS)}")
-    print(f"\nTo remove: python3 {sys.argv[0]} --delete")
+    print(f"\nTo remove: sudo prsm --delete-test-data {DATASET}")
 
 def delete():
     ensure_schema()

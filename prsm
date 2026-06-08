@@ -85,6 +85,9 @@ show_help() {
   echo "    --inject-test-data [name]  Inject synthetic test data into a dataset"
   echo "                               Prompts for dataset name if not provided"
   echo "                               Example: prsm --inject-test-data seconion"
+  echo "    --delete-test-data [name]  Remove all injected test rows from a dataset"
+  echo "                               Prompts for dataset name if not provided"
+  echo "                               Example: prsm --delete-test-data seconion"
   echo ""
   echo "  Options:"
   echo "    --offline                Add to --install for offline deployment"
@@ -120,6 +123,7 @@ DOCKER_UPDATE=false
 NODE_UPDATE=false
 RITA_UPDATE=false
 INJECT_TEST_DATA=false
+DELETE_TEST_DATA=false
 INJECT_DATASET_ARG=""
 INSTALL=false
 
@@ -140,6 +144,17 @@ while [ $_i -le $# ]; do
         --rita-update)       RITA_UPDATE=true ;;
         --inject-test-data)
             INJECT_TEST_DATA=true
+            _next=$(( _i + 1 ))
+            if [ $_next -le $# ]; then
+                _next_arg="${!_next}"
+                if [[ "$_next_arg" != --* ]]; then
+                    INJECT_DATASET_ARG="${_next_arg#-}"
+                    _i=$_next
+                fi
+            fi
+            ;;
+        --delete-test-data)
+            DELETE_TEST_DATA=true
             _next=$(( _i + 1 ))
             if [ $_next -le $# ]; then
                 _next_arg="${!_next}"
@@ -740,11 +755,70 @@ if $INJECT_TEST_DATA; then
     exit 0
 fi
 
+# ── Delete test data ──────────────────────────────────────────────────────────
+if $DELETE_TEST_DATA; then
+    section "DELETE TEST DATA"
+
+    # Check PRSM is installed
+    if [ ! -d "$INSTALL_DIR" ] || ! systemctl is-active --quiet prsm 2>/dev/null; then
+        echo -e "${RED}${BOLD}PRSM does not appear to be installed or running.${RESET}"
+        echo "  Expected directory: $INSTALL_DIR"
+        echo "  Expected service:   prsm.service (active)"
+        echo ""
+        echo "Run 'sudo prsm --install' to install PRSM first."
+        exit 1
+    fi
+    ok "PRSM installation found at $INSTALL_DIR"
+
+    # Check ClickHouse is reachable
+    if ! curl -sf --max-time 5 "http://${CLICKHOUSE_HOST}:${CLICKHOUSE_PORT}/ping" 2>/dev/null | grep -q "Ok"; then
+        echo -e "${RED}${BOLD}ClickHouse is not reachable at ${CLICKHOUSE_HOST}:${CLICKHOUSE_PORT}.${RESET}"
+        echo "Ensure RITA/ClickHouse containers are running: cd $RITA_DIR && docker compose up -d"
+        exit 1
+    fi
+    ok "ClickHouse reachable at ${CLICKHOUSE_HOST}:${CLICKHOUSE_PORT}"
+
+    # Dataset name — use CLI argument if provided, otherwise prompt interactively
+    if [ -n "$INJECT_DATASET_ARG" ]; then
+        INJECT_DATASET="$INJECT_DATASET_ARG"
+    else
+        echo ""
+        read -r -p "  Dataset name [sensor250]: " INJECT_DATASET
+        INJECT_DATASET="${INJECT_DATASET:-sensor250}"
+    fi
+
+    # Validate dataset name — alphanumeric, underscores, hyphens only
+    if [[ ! "$INJECT_DATASET" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        echo -e "  ${RED}✗ Invalid dataset name — only letters, numbers, underscores, and hyphens are allowed${RESET}"
+        exit 1
+    fi
+    echo ""
+
+    read -r -p "  Delete all test rows from ${INJECT_DATASET}? [y/N]: " DELETE_CONFIRM
+    if [[ ! "$DELETE_CONFIRM" =~ ^[Yy]$ ]]; then
+        echo "Aborted."
+        exit 0
+    fi
+    echo ""
+
+    ok "Deleting test data from dataset: $INJECT_DATASET"
+    if PRSM_TEST_DATASET="$INJECT_DATASET" python3 "$INSTALL_DIR/inject_test_data.py" --delete; then
+        echo ""
+        echo -e "${GREEN}${BOLD}✓ Test data removed from ${INJECT_DATASET}.${RESET}"
+    else
+        echo ""
+        echo -e "${RED}${BOLD}Test data deletion failed — see output above.${RESET}"
+        exit 1
+    fi
+    echo ""
+    exit 0
+fi
+
 # ── Section 1: Pre-flight checks ─────────────────────────────────────────────
 # Trigger install if --install was passed, or if no action flag triggered an early exit above
 if ! $INSTALL && ! $UNINSTALL && ! $UPDATE && ! $CHECK_UPDATES && \
    ! $PYTHON_UPDATE && ! $NGINX_UPDATE && ! $DOCKER_UPDATE && \
-   ! $NODE_UPDATE && ! $RITA_UPDATE && ! $INJECT_TEST_DATA; then
+   ! $NODE_UPDATE && ! $RITA_UPDATE && ! $INJECT_TEST_DATA && ! $DELETE_TEST_DATA; then
     INSTALL=true
 fi
 
