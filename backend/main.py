@@ -100,8 +100,9 @@ app.include_router(strobe.router,      dependencies=deps)
 app.include_router(dashboard.router,   dependencies=deps)
 app.include_router(protocols.router,   dependencies=deps)
 app.include_router(charts.router,      dependencies=deps)
-app.include_router(whitelist.router,   dependencies=deps)
-app.include_router(investigate.router, dependencies=deps)
+app.include_router(whitelist.router,      dependencies=deps)
+app.include_router(investigate.router,    dependencies=deps)
+app.include_router(datasets.updates_router, dependencies=deps)
 
 @app.get("/health")
 def health():

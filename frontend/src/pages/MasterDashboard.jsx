@@ -132,8 +132,13 @@ export default function MasterDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [pendingNav, setPendingNav] = useState(false)
+  const [updateAvailable, setUpdateAvailable] = useState(false)
+  const [updateDismissed, setUpdateDismissed] = useState(
+    () => sessionStorage.getItem('prsm_update_dismissed') === '1'
+  )
 
   useEffect(() => {
+    // Dataset summary and update check run in parallel
     axios.get('/api/datasets/summary', { headers: authHeader })
       .then(r => {
         setSummaries(r.data.datasets)
@@ -141,6 +146,10 @@ export default function MasterDashboard() {
       })
       .catch(() => setError('Failed to load datasets'))
       .finally(() => setLoading(false))
+
+    axios.get('/api/updates/check', { headers: authHeader })
+      .then(r => { if (r.data.update_available) setUpdateAvailable(true) })
+      .catch(() => {})
   }, [])
 
   // Navigate only after state has committed
@@ -154,6 +163,11 @@ export default function MasterDashboard() {
     setPendingNav(true)
   }
 
+  const dismissUpdate = () => {
+    sessionStorage.setItem('prsm_update_dismissed', '1')
+    setUpdateDismissed(true)
+  }
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -164,6 +178,41 @@ export default function MasterDashboard() {
       padding: '3rem 2rem',
     }}>
       <div style={{ width: '100%', maxWidth: 900 }}>
+        {updateAvailable && !updateDismissed && (
+          <div style={{
+            background: '#2d1e00',
+            border: '1px solid #92400e',
+            borderRadius: 6,
+            padding: '0.6rem 1rem',
+            marginBottom: '1.25rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '0.75rem',
+          }}>
+            <span style={{ color: '#fbbf24', fontSize: 13 }}>
+              ⚠ A PRSM update is available — run:{' '}
+              <code style={{ color: '#fde68a', fontFamily: 'monospace' }}>sudo bash setup.sh --update</code>
+            </span>
+            <button
+              onClick={dismissUpdate}
+              aria-label="Dismiss update notification"
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#d97706',
+                cursor: 'pointer',
+                fontSize: 16,
+                lineHeight: 1,
+                padding: '0 0.25rem',
+                flexShrink: 0,
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '2.5rem', gap: '0.75rem' }}>
           <img src={prsmLogo} alt="PRSM" style={{ width: 180 }} />
           <p style={{ color: '#475569', fontSize: 13, margin: 0 }}>Select a dataset to begin analysis</p>

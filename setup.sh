@@ -17,6 +17,11 @@
 #
 # To update an existing PRSM installation in-place:
 #   sudo bash setup.sh --update
+#
+# To check for available updates (report only, no changes):
+#   sudo bash setup.sh --check-updates
+#   (note: RITA and Node.js version checks require internet access;
+#    in offline mode those checks are skipped)
 # ============================================================
 set -e
 
@@ -52,15 +57,17 @@ FORCE=false
 UNINSTALL=false
 KEEP_DATA=false
 UPDATE=false
+CHECK_UPDATES=false
 
 for arg in "$@"; do
     case "$arg" in
-        --offline)    OFFLINE=true ;;
-        --force)      FORCE=true ;;
-        --uninstall)  UNINSTALL=true ;;
-        --keep-data)  KEEP_DATA=true ;;
-        --update)     UPDATE=true ;;
-        *)  echo -e "${RED}Unknown flag: $arg${RESET}"; echo "Usage: sudo bash setup.sh [--offline] [--force] [--uninstall] [--keep-data] [--update]"; exit 1 ;;
+        --offline)        OFFLINE=true ;;
+        --force)          FORCE=true ;;
+        --uninstall)      UNINSTALL=true ;;
+        --keep-data)      KEEP_DATA=true ;;
+        --update)         UPDATE=true ;;
+        --check-updates)  CHECK_UPDATES=true ;;
+        *)  echo -e "${RED}Unknown flag: $arg${RESET}"; echo "Usage: sudo bash setup.sh [--offline] [--force] [--uninstall] [--keep-data] [--update] [--check-updates]"; exit 1 ;;
     esac
 done
 
@@ -190,6 +197,150 @@ fi
 # ── Root check (early, before anything else) ─────────────────────────────────
 if [ "$EUID" -ne 0 ]; then
     die "This script must be run as root. Use: sudo bash setup.sh"
+fi
+
+# ── Check Updates ─────────────────────────────────────────────────────────────
+if $CHECK_UPDATES; then
+    section "PRSM UPDATE CHECK"
+    set +e
+
+    PRSM_STATUS="" RITA_STATUS="" PYTHON_STATUS=""
+    NGINX_STATUS="" DOCKER_STATUS="" NODE_STATUS=""
+
+    # ── PRSM ──
+    if [ -d "$INSTALL_DIR/.git" ]; then
+        git -C "$INSTALL_DIR" fetch origin --quiet 2>/dev/null
+        LOCAL_HASH=$(git -C "$INSTALL_DIR" rev-parse HEAD 2>/dev/null || true)
+        REMOTE_HASH=$(git -C "$INSTALL_DIR" rev-parse origin/main 2>/dev/null || true)
+        if [ -z "$LOCAL_HASH" ] || [ -z "$REMOTE_HASH" ]; then
+            warn "PRSM — could not compare commits (fetch may have failed)"
+            PRSM_STATUS="⚠ check failed"
+        elif [ "$LOCAL_HASH" != "$REMOTE_HASH" ]; then
+            echo -e "  ${YELLOW}⚠${RESET}  PRSM update available — run: ${BOLD}sudo bash setup.sh --update${RESET}"
+            PRSM_STATUS="⚠ update available"
+        else
+            SHORT="${LOCAL_HASH:0:7}"
+            ok "PRSM is up to date (commit: ${SHORT})"
+            PRSM_STATUS="✓ up to date"
+        fi
+    else
+        warn "PRSM — not a git repository at $INSTALL_DIR"
+        PRSM_STATUS="⚠ not a git repo"
+    fi
+
+    # ── Python packages ──
+    OUTDATED_PY=$(pip3 list --outdated 2>/dev/null \
+        | grep -E "fastapi|uvicorn|clickhouse|passlib|bcrypt|dotenv|openpyxl|multipart" || true)
+    if [ -n "$OUTDATED_PY" ]; then
+        echo -e "  ${YELLOW}⚠${RESET}  Python packages outdated:"
+        echo "$OUTDATED_PY" | while read -r line; do echo "       $line"; done
+        PYTHON_STATUS="⚠ updates available"
+    else
+        ok "Python packages up to date"
+        PYTHON_STATUS="✓ up to date"
+    fi
+
+    # ── RITA ──
+    rita_installed=""
+    if command -v rita &>/dev/null; then
+        rita_installed=$(rita --version 2>/dev/null \
+            | grep -oE 'v[0-9]+\.[0-9]+\.?[0-9]*' | head -1 || true)
+    elif [ -f "$RITA_DIR/docker-compose.yml" ]; then
+        _rv=$(grep -Ei "image:.*rita" "$RITA_DIR/docker-compose.yml" 2>/dev/null \
+            | grep -oE '[0-9]+\.[0-9]+\.?[0-9]*' | head -1 || true)
+        [ -n "$_rv" ] && rita_installed="v${_rv}"
+    fi
+
+    if $OFFLINE; then
+        ok "RITA — version check skipped (offline mode, internet required)"
+        RITA_STATUS="✓ skipped (offline)"
+    else
+        rita_latest=$(curl -s --max-time 5 \
+            "https://api.github.com/repos/activecm/rita/releases/latest" 2>/dev/null \
+            | grep '"tag_name"' | grep -oE 'v[0-9]+\.[0-9]+\.?[0-9]*' | head -1 || true)
+
+        if [ -z "$rita_latest" ]; then
+            warn "Could not check RITA version — no internet access?"
+            RITA_STATUS="⚠ check failed"
+        elif [ -z "$rita_installed" ]; then
+            warn "RITA version unknown locally (latest: ${rita_latest})"
+            RITA_STATUS="⚠ unknown"
+        else
+            rita_inst_clean=$(strip_v "$rita_installed")
+            rita_latest_clean=$(strip_v "$rita_latest")
+            if version_gte "$rita_inst_clean" "$rita_latest_clean"; then
+                ok "RITA is up to date (${rita_installed})"
+                RITA_STATUS="✓ up to date"
+            else
+                echo -e "  ${YELLOW}⚠${RESET}  RITA update available: ${rita_installed} → ${rita_latest} (manual update required)"
+                RITA_STATUS="⚠ update available"
+            fi
+        fi
+    fi
+
+    # ── nginx ──
+    NGINX_OUTDATED=$(apt list --upgradable 2>/dev/null | grep nginx || true)
+    if [ -n "$NGINX_OUTDATED" ]; then
+        echo -e "  ${YELLOW}⚠${RESET}  nginx update available — run: ${BOLD}sudo apt upgrade nginx${RESET}"
+        NGINX_STATUS="⚠ update available"
+    else
+        ok "nginx is up to date"
+        NGINX_STATUS="✓ up to date"
+    fi
+
+    # ── Docker ──
+    DOCKER_OUTDATED=$(apt list --upgradable 2>/dev/null | grep docker || true)
+    if [ -n "$DOCKER_OUTDATED" ]; then
+        echo -e "  ${YELLOW}⚠${RESET}  Docker update available — run: ${BOLD}sudo apt upgrade docker-ce${RESET}"
+        DOCKER_STATUS="⚠ update available"
+    else
+        ok "Docker is up to date"
+        DOCKER_STATUS="✓ up to date"
+    fi
+
+    # ── Node.js ──
+    if command -v node &>/dev/null; then
+        node_current=$(node --version 2>/dev/null \
+            | grep -oE '[0-9]+\.[0-9]+\.?[0-9]*' | head -1 || true)
+        node_current_major=$(echo "$node_current" | cut -d. -f1)
+        if $OFFLINE; then
+            ok "Node.js v${node_current} (LTS check skipped — offline mode)"
+            NODE_STATUS="✓ installed"
+        else
+            node_lts=$(curl -s --max-time 5 "https://resolve.installnode.com/lts" 2>/dev/null || true)
+            if [ -z "$node_lts" ]; then
+                ok "Node.js v${node_current} (could not fetch latest LTS)"
+                NODE_STATUS="✓ installed"
+            elif [ "${node_current_major:-0}" -lt "${node_lts:-0}" ] 2>/dev/null; then
+                echo -e "  ${YELLOW}⚠${RESET}  Node.js v${node_current} installed, LTS is v${node_lts}"
+                NODE_STATUS="⚠ update available"
+            else
+                ok "Node.js is up to date (v${node_current})"
+                NODE_STATUS="✓ up to date"
+            fi
+        fi
+    else
+        warn "Node.js not found"
+        NODE_STATUS="⚠ not found"
+    fi
+
+    set -e
+
+    echo ""
+    echo -e "${BOLD}═══════════════════════════════════════════${RESET}"
+    echo -e "${BOLD} PRSM UPDATE CHECK — $(date '+%Y-%m-%d %H:%M %Z')${RESET}"
+    echo -e "${BOLD}═══════════════════════════════════════════${RESET}"
+    printf " %-14s %s\n" "PRSM"        "$PRSM_STATUS"
+    printf " %-14s %s\n" "RITA"        "$RITA_STATUS"
+    printf " %-14s %s\n" "Python pkgs" "$PYTHON_STATUS"
+    printf " %-14s %s\n" "nginx"       "$NGINX_STATUS"
+    printf " %-14s %s\n" "Docker"      "$DOCKER_STATUS"
+    printf " %-14s %s\n" "Node.js"     "$NODE_STATUS"
+    echo -e "${BOLD}═══════════════════════════════════════════${RESET}"
+    echo ""
+    echo "Run 'sudo bash setup.sh --check-updates' anytime to recheck."
+    echo ""
+    exit 0
 fi
 
 # ── Update ────────────────────────────────────────────────────────────────────

@@ -1,8 +1,12 @@
+import subprocess
 from fastapi import APIRouter, Query
 from backend.db import get_client
 from typing import Optional
 
 router = APIRouter(prefix="/api/datasets", tags=["datasets"])
+updates_router = APIRouter(prefix="/api/updates", tags=["updates"])
+
+_PRSM_DIR = "/opt/PRSM"
 
 EXCLUDED = {"INFORMATION_SCHEMA", "information_schema", "system", "default", "metadatabase"}
 
@@ -76,3 +80,42 @@ def datasets_summary():
             })
 
     return {"datasets": summaries}
+
+
+@updates_router.get("/check")
+def check_updates():
+    """Check whether a PRSM git update is available. Fast — 5s timeout on fetch."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", _PRSM_DIR, "fetch", "origin", "--quiet"],
+            timeout=5,
+            capture_output=True,
+        )
+        if result.returncode != 0:
+            return {"update_available": False, "error": "fetch_failed"}
+    except Exception:
+        return {"update_available": False, "error": "fetch_failed"}
+
+    try:
+        local = subprocess.check_output(
+            ["git", "-C", _PRSM_DIR, "rev-parse", "HEAD"],
+            timeout=5, text=True, stderr=subprocess.DEVNULL,
+        ).strip()
+        remote = subprocess.check_output(
+            ["git", "-C", _PRSM_DIR, "rev-parse", "origin/main"],
+            timeout=5, text=True, stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception:
+        return {"update_available": False, "error": "fetch_failed"}
+
+    if local != remote:
+        return {
+            "update_available": True,
+            "current_commit": local[:7],
+            "latest_commit": remote[:7],
+            "message": "A PRSM update is available",
+        }
+    return {
+        "update_available": False,
+        "current_commit": local[:7],
+    }
