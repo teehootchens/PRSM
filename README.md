@@ -91,7 +91,8 @@ The script runs as root and handles everything: pre-flight checks, dependency in
 | `prsm --uninstall --keep-data` | Uninstall but preserve `.env` and `whitelist.db` to `/tmp/prsm-backup/` |
 | `prsm --update` | Pull latest PRSM code, update Python packages, rebuild frontend, restart service |
 | `prsm --check-updates` | Check all components for available updates (report only, no changes) |
-| `prsm --inject-test-data` | Inject ~2,000 rows of synthetic test data into a ClickHouse dataset |
+| `prsm --inject-test-data` | Inject synthetic test data, prompts for dataset name |
+| `prsm --inject-test-data myDataset` | Inject synthetic test data into named dataset, no prompt |
 | `prsm --python-update` | Upgrade PRSM Python dependencies |
 | `prsm --nginx-update` | Upgrade nginx via apt |
 | `prsm --docker-update` | Upgrade Docker (briefly restarts containers) |
@@ -101,6 +102,8 @@ The script runs as root and handles everything: pre-flight checks, dependency in
 | `prsm --install --force` | Overwrite an existing `.env` and SSL certificate |
 
 > Always invoke as `sudo prsm <command>`. On first install before `prsm` is in `PATH`, use `sudo bash prsm --install` from the repo directory.
+
+> Dataset names for `--inject-test-data` may only contain letters, numbers, underscores, and hyphens.
 
 ### Offline bundle preparation
 

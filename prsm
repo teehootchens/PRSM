@@ -33,7 +33,8 @@
 #                                (GitHub version check skipped in offline mode)
 #
 # To inject synthetic test data into ClickHouse for UI verification:
-#   sudo prsm --inject-test-data
+#   sudo prsm --inject-test-data              — prompts for dataset name
+#   sudo prsm --inject-test-data seconion     — inject into a specific dataset
 # ============================================================
 set -e
 
@@ -81,7 +82,9 @@ show_help() {
   echo "    --docker-update          Upgrade Docker"
   echo "    --node-update            Upgrade Node.js to latest LTS and rebuild frontend"
   echo "    --rita-update            Show RITA update instructions (manual process)"
-  echo "    --inject-test-data       Inject ~2,000 rows of synthetic test data into ClickHouse"
+  echo "    --inject-test-data [name]  Inject synthetic test data into a dataset"
+  echo "                               Prompts for dataset name if not provided"
+  echo "                               Example: prsm --inject-test-data seconion"
   echo ""
   echo "  Options:"
   echo "    --offline                Add to --install for offline deployment"
@@ -117,9 +120,12 @@ DOCKER_UPDATE=false
 NODE_UPDATE=false
 RITA_UPDATE=false
 INJECT_TEST_DATA=false
+INJECT_DATASET_ARG=""
 INSTALL=false
 
-for arg in "$@"; do
+_i=1
+while [ $_i -le $# ]; do
+    arg="${!_i}"
     case "$arg" in
         --offline)           OFFLINE=true ;;
         --force)             FORCE=true ;;
@@ -132,10 +138,21 @@ for arg in "$@"; do
         --docker-update)     DOCKER_UPDATE=true ;;
         --node-update)       NODE_UPDATE=true ;;
         --rita-update)       RITA_UPDATE=true ;;
-        --inject-test-data)  INJECT_TEST_DATA=true ;;
+        --inject-test-data)
+            INJECT_TEST_DATA=true
+            _next=$(( _i + 1 ))
+            if [ $_next -le $# ]; then
+                _next_arg="${!_next}"
+                if [[ "$_next_arg" != --* ]]; then
+                    INJECT_DATASET_ARG="${_next_arg#-}"
+                    _i=$_next
+                fi
+            fi
+            ;;
         --install)           INSTALL=true ;;
         *)  echo -e "${RED}Unknown flag: $arg${RESET}"; show_help; exit 1 ;;
     esac
+    _i=$(( _i + 1 ))
 done
 
 # ── Helper functions ─────────────────────────────────────────────────────────
@@ -681,10 +698,20 @@ if $INJECT_TEST_DATA; then
     fi
     ok "ClickHouse reachable at ${CLICKHOUSE_HOST}:${CLICKHOUSE_PORT}"
 
-    # Prompt for dataset name
-    echo ""
-    read -r -p "  Dataset name to inject test data into [sensor250]: " INJECT_DATASET
-    INJECT_DATASET="${INJECT_DATASET:-sensor250}"
+    # Dataset name — use CLI argument if provided, otherwise prompt interactively
+    if [ -n "$INJECT_DATASET_ARG" ]; then
+        INJECT_DATASET="$INJECT_DATASET_ARG"
+    else
+        echo ""
+        read -r -p "  Dataset name [sensor250]: " INJECT_DATASET
+        INJECT_DATASET="${INJECT_DATASET:-sensor250}"
+    fi
+
+    # Validate dataset name — alphanumeric, underscores, hyphens only
+    if [[ ! "$INJECT_DATASET" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        echo -e "  ${RED}✗ Invalid dataset name — only letters, numbers, underscores, and hyphens are allowed${RESET}"
+        exit 1
+    fi
     echo ""
 
     # Warn about what will happen
