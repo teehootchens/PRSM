@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-sudo chown -R prsm:prsm /opt/PRSM/backend/static
+sudo chown -R "$(id -un)":"$(id -un)" /opt/PRSM/backend/static
 cd /opt/PRSM/frontend
 npm run build
 sudo chown -R prsm:prsm /opt/PRSM/backend/static

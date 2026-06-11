@@ -29,7 +29,7 @@ Primary use cases:
 | Reverse proxy | Nginx (TLS termination) |
 | Process manager | systemd (`prsm.service`) |
 | Auth | HMAC-signed bearer tokens (8hr expiry) |
-| Version control | GitHub (private) — `teehootchens/PRSM` |
+| Version control | GitHub (public) — `teehootchens/PRSM` |
 
 ---
 
@@ -219,7 +219,6 @@ python3 -c "from passlib.hash import bcrypt; print(bcrypt.hash('yourpassword'))"
 - Git operations as root will fail with "dubious ownership" — use your dev user or `sudo -u prsm git`
 - The `prsm` user owns `/opt/PRSM` at runtime; use your local dev user for git operations
 - Nginx `limit_req_zone` lives in `/etc/nginx/nginx.conf` http block — do not add it to the site config too
-- `MasterDashboard.jsx` update banner still says `sudo bash setup.sh --update` — needs updating to `sudo prsm --update`
 
 ---
 

@@ -197,7 +197,7 @@ export default function MasterDashboard() {
           }}>
             <span style={{ color: '#fbbf24', fontSize: 13 }}>
               ⚠ A PRSM update is available — run:{' '}
-              <code style={{ color: '#fde68a', fontFamily: 'monospace' }}>sudo bash setup.sh --update</code>
+              <code style={{ color: '#fde68a', fontFamily: 'monospace' }}>sudo prsm --update</code>
             </span>
             <button
               onClick={dismissUpdate}
