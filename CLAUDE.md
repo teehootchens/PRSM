@@ -216,8 +216,8 @@ python3 -c "from passlib.hash import bcrypt; print(bcrypt.hash('yourpassword'))"
 ## Known Issues / Watch Out For
 - `whitelist.db` and `.env` must never be committed — both in `.gitignore`
 - `investigate.router` and `whitelist.router` were previously registered multiple times — fixed, do not re-introduce
-- Git operations as root will fail with "dubious ownership" — use `your-username` or `sudo -u prsm git`
-- The `prsm` user owns `/opt/PRSM` at runtime but `your-username` is the dev user
+- Git operations as root will fail with "dubious ownership" — use your dev user or `sudo -u prsm git`
+- The `prsm` user owns `/opt/PRSM` at runtime; use your local dev user for git operations
 - Nginx `limit_req_zone` lives in `/etc/nginx/nginx.conf` http block — do not add it to the site config too
 - `MasterDashboard.jsx` update banner still says `sudo bash setup.sh --update` — needs updating to `sudo prsm --update`
 
